@@ -174,9 +174,16 @@ flowchart TD
 
     Classify -->|"Second Temple or Roman Jewish history"| AncientSources
     AncientSources["`**search_ancient_sources**
-    Returns: Josephus source passages,
-    Greek/English text, and provenance`"]
+    Returns: source passages from registered
+    corpora (Josephus), original/English text,
+    and provenance`"]
     AncientSources --> Respond
+
+    Classify -->|"Ancient-source citation (Ant. 18.116)"| AncientLookup
+    AncientLookup["`**lookup_ancient_source**
+    Returns: the cited passages in order,
+    original/English text, and provenance`"]
+    AncientLookup --> Respond
 
     %% === THEOLOGY PATH ===
     Classify -->|"Attributed scholarship"| TheologyContext
@@ -254,6 +261,7 @@ flowchart TD
     style TextualVariant fill:#7ed321,stroke:#5a9e18,color:#fff
     style VersionComparison fill:#7ed321,stroke:#5a9e18,color:#fff
     style AncientSources fill:#e67e22,stroke:#cf6d17,color:#fff
+    style AncientLookup fill:#e67e22,stroke:#cf6d17,color:#fff
 ```
 
 ## Tool Colour Key
@@ -264,7 +272,7 @@ flowchart TD
 | Purple | Hybrid search | find_similar_passages, graph_enriched_search |
 | Red | Graph knowledge | explore_genealogy, explore_person_events, explore_place, find_connection, people_in_passage |
 | Light blue | Scholarly commentary | get_study_notes, get_bible_dictionary, get_key_terms, get_theology_context |
-| Dark orange | Cultural and historical context | get_ane_context, search_ancient_sources |
+| Dark orange | Cultural and historical context | get_ane_context, search_ancient_sources, lookup_ancient_source |
 | Orange | Agent decisions | Classification and enrichment decision points |
 | Blue | User interaction | Question input and final response |
 
@@ -314,7 +322,7 @@ User question → `lookup_verse` → `get_study_notes` →
 `get_ane_context` (for cultural illumination) → `word_study` → response
 
 **Primary-source history:**
-User question → `search_ancient_sources` → `lookup_verse` (for an explicitly linked biblical passage) → response
+User question → `search_ancient_sources` → `lookup_ancient_source` (to read a cited passage in full) → `lookup_verse` (for an explicitly linked biblical passage) → response
 
 **Edition comparison:**
 User question → `compare_biblical_versions` → `word_study` (when morphology needs explanation) → response

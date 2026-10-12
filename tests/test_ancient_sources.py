@@ -6,8 +6,9 @@ import pytest
 
 from study_bible_mcp import server
 from study_bible_mcp.database import StudyBibleDB, create_schema
-from study_bible_mcp.parsers import ancient_sources
-from study_bible_mcp.parsers.ancient_sources import import_josephus, parse_josephus_work
+from study_bible_mcp.corpora import josephus
+from study_bible_mcp.corpora.josephus import parse_josephus_work
+from study_bible_mcp.parsers.ancient_sources import import_josephus
 from study_bible_mcp.tools import format_ancient_source_results
 
 
@@ -97,7 +98,7 @@ def _write_corpus(directory: Path) -> Path:
 
 
 def _build_db(tmp_path: Path, monkeypatch, links=(TEST_LINK,)) -> Path:
-    monkeypatch.setattr(ancient_sources, "_BIBLICAL_LINKS", links)
+    monkeypatch.setattr(josephus, "_BIBLICAL_LINKS", links)
     db_path = tmp_path / "ancient.db"
     conn = sqlite3.connect(db_path)
     create_schema(conn)
@@ -288,6 +289,112 @@ async def test_handler_distinguishes_empty_result_causes(tmp_path, monkeypatch):
         assert "upgrade_database" not in message and "download" not in message
 
 
+async def _call(path: Path, monkeypatch, handler, **args) -> str:
+    database = StudyBibleDB(path)
+    await database.connect()
+    monkeypatch.setattr(server, "db", database)
+    try:
+        return (await handler(args))[0].text
+    finally:
+        await database.close()
+
+
+@pytest.mark.asyncio
+async def test_lookup_resolves_a_section_inside_a_whiston_span(tmp_path, monkeypatch):
+    db_path = _build_db(tmp_path, monkeypatch)
+    lookup = server.handle_lookup_ancient_source
+
+    inside = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.117")
+    spanning = await _call(db_path, monkeypatch, lookup, citation="Josephus, A.J. 18.116-121")
+    no_greek = await _call(db_path, monkeypatch, lookup, citation="Antiquities 18.116", include_original=False)
+    life = await _call(db_path, monkeypatch, lookup, citation="Life 1")
+
+    assert inside.startswith("## Antiquities 18.117\n")
+    assert "1 overlapping passage*" in inside
+    assert "### Flavius Josephus, Antiquities 18.116–119 (Whiston 18.5.2)" in inside
+    assert "**Corpus:** Josephus" in inside and "**License:** CC BY-SA 4.0" in inside
+    assert "**Greek text excerpt:**\nἸωάννου" in inside
+    assert "Mrk 6:17–29 — Related account" in inside
+    assert spanning.index("Antiquities 18.116–119") < spanning.index("Antiquities 18.120–121")
+    assert "2 overlapping passages" in spanning
+    assert "Greek text excerpt" not in no_greek and "Some thought" in no_greek
+    assert "### Flavius Josephus, Life 1 (Whiston 1)" in life
+
+
+@pytest.mark.asyncio
+async def test_lookup_caps_passages_and_explains_failures(tmp_path, monkeypatch):
+    db_path = _build_db(tmp_path, monkeypatch)
+    empty_path = tmp_path / "empty.db"
+    sqlite3.connect(empty_path).close()
+    lookup = server.handle_lookup_ancient_source
+    monkeypatch.setattr(server, "ANCIENT_LOOKUP_LIMIT", 1)
+
+    capped = await _call(db_path, monkeypatch, lookup, citation="Antiquities 18")
+    out_of_range = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.200")
+    unknown = await _call(db_path, monkeypatch, lookup, citation="Bava Batra 3b-4a")
+    no_locator = await _call(db_path, monkeypatch, lookup, citation="Antiquities")
+    whiston = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.5.2")
+    bad_corpus = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.116", corpus="philo")
+    missing = await _call(empty_path, monkeypatch, lookup, citation="Ant. 18.116")
+
+    assert "Showing the first 1 of 2 overlapping passages" in capped
+    assert "Antiquities 18.120–121" not in capped
+    assert out_of_range == (
+        "No passage covers Antiquities 18.200. Imported Antiquities runs Antiquities "
+        "18.116–121; nearest passages: preceding Antiquities 18.120–121."
+    )
+    assert unknown.startswith("Unknown work in citation 'Bava Batra 3b-4a'")
+    assert "Josephus (josephus): Antiquities, Life, Against Apion, War" in unknown
+    assert no_locator.startswith("No locator in 'Antiquities'")
+    assert "cited by book.section" in no_locator and "'Antiquities 18.116'" in no_locator
+    assert whiston.startswith("Could not read the locator '18.5.2'")
+    assert bad_corpus.startswith("Unsupported ancient-source corpus 'philo'")
+    assert "python scripts/upgrade_database.py" in missing
+
+
+@pytest.mark.asyncio
+async def test_lookup_asks_for_reimport_when_rows_predate_sort_keys(tmp_path, monkeypatch):
+    db_path = _build_db(tmp_path, monkeypatch)
+    conn = sqlite3.connect(db_path)
+    conn.execute("UPDATE ancient_source_passages SET sort_start = NULL, sort_end = NULL")
+    conn.commit()
+    conn.close()
+
+    reply = await _call(db_path, monkeypatch, server.handle_lookup_ancient_source, citation="Ant. 18.116")
+
+    assert "imported before citation lookup existed" in reply
+    assert "python scripts/upgrade_database.py" in reply
+
+
+@pytest.mark.asyncio
+async def test_search_accepts_all_and_rejects_unregistered_corpora(tmp_path, monkeypatch):
+    db_path = _build_db(tmp_path, monkeypatch)
+    search = server.handle_search_ancient_sources
+
+    everything = await _call(db_path, monkeypatch, search, query="John Baptist", corpus="all")
+    none = await _call(db_path, monkeypatch, search, query="xylophone", corpus="all")
+    unknown = await _call(db_path, monkeypatch, search, query="John", corpus="philo")
+
+    assert "*Filters: corpus=all*" in everything
+    assert "*Josephus · Jewish Antiquities ·" in everything and "Antiquities 18.116–119" in everything
+    assert none == "No ancient-source passage contains any of the search terms (xylophone)."
+    assert unknown == (
+        "Unsupported ancient-source corpus 'philo'. Available corpora: josephus, or 'all'."
+    )
+
+
+def test_parser_emits_generic_sort_keys_and_licences(tmp_path):
+    _write_corpus(tmp_path)
+
+    antiquities = parse_josephus_work(tmp_path, "tlg001")
+    life = parse_josephus_work(tmp_path, "tlg002")
+
+    assert [(row["sort_start"], row["sort_end"]) for row in antiquities] == [(18116, 18119), (18120, 18121)]
+    assert [(row["sort_start"], row["sort_end"]) for row in life] == [(1, 1)]
+    assert {(row["original_language"], row["original_license"], row["translation_license"])
+            for row in antiquities} == {("Greek", "CC BY-SA 4.0", "CC BY-SA 4.0")}
+
+
 def test_ancient_source_formatter_labels_primary_text_and_provenance():
     row = {
         "author": "Flavius Josephus",
@@ -308,11 +415,11 @@ def test_ancient_source_formatter_labels_primary_text_and_provenance():
     output = format_ancient_source_results("John Baptist", [row], "josephus")
 
     assert "### Flavius Josephus, Antiquities 18.116–119 (Whiston 18.5.2)" in output
-    assert "*Jewish Antiquities · editorial period tags: second_temple,herodian,roman*" in output
+    assert "*Josephus · Jewish Antiquities · editorial period tags: second_temple,herodian,roman*" in output
     assert "*Whiston chapter heading (editorial): HOW HEROD" in output
     assert "**Greek:** Ἰωάννου τοῦ βαπτιστοῦ" in output
     assert output.endswith(
-        "**Sources**\n- Greek: Benedikt Niese. English: William Whiston. "
+        "**Sources**\n- Josephus: Greek: Benedikt Niese. English: William Whiston. "
         "License: CC BY-SA 4.0. https://example.test/josephus"
     )
     assert "No passage contains all terms" not in output

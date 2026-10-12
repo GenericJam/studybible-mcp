@@ -2,6 +2,45 @@
 
 ---
 
+## Ancient-source corpus framework and citation lookup
+
+- Added `lookup_ancient_source(citation, corpus, include_original)`, which
+  reads a passage by citation: `Antiquities 18.116`, `Ant. 18.116-119`,
+  `A.J. 15.320` (inside `Antiquities 15.317–322`), `Josephus, War 6.316`, or
+  `Life 1`. Ranges return every overlapping passage in order (at most 10, with
+  a note when more exist). Unknown works, ambiguous works, unreadable locators,
+  out-of-range locators (with the imported range and nearest passages), and
+  missing or outdated corpora each get a specific message.
+- Ancient sources are now a registry of corpora (`study_bible_mcp.corpora`),
+  each one module declaring its works and citation aliases, locator grammar,
+  pinned download, parser, curated biblical links, and period tags. Josephus
+  is ported with identical passages, Greek, search index, and links.
+- Added a locator grammar library: `section`, `book.section`,
+  `chapter:verse`, `column:line` (with Roman column numerals), and Talmud
+  `daf+amud` (`3b`, `3b-4a`, `3a-b`).
+- `search_ancient_sources` accepts any registered corpus or `all`; its
+  description and corpus and period lists come from the registry, and every
+  result names its corpus.
+- `ancient_source_passages` gains `sort_start`/`sort_end` locator keys,
+  `original_language`, `original_license`, `translation_license`, and
+  `collection`; the combined `license` stays. `create_schema` adds the columns
+  to existing databases; run `python scripts/upgrade_database.py` to re-import
+  with sort keys.
+- Search folds Hebrew and Aramaic vowel points and cantillation like Greek
+  accents. A pointed Hebrew query is no longer split into fragments at each
+  vowel point.
+- Corpus imports validate every passage and link before writing, replace one
+  corpus inside a savepoint, and merge the FTS index afterwards, so repeated
+  upgrades no longer grow it (about 5 MB per Josephus re-import before).
+- `download_ancient_sources.py`, `build_database.py`, `upgrade_database.py`,
+  and `smoke_server.py` iterate over the registry: every corpus is downloaded
+  and checksum-verified, every downloaded corpus is imported (a present but
+  incomplete one fails), and the smoke run searches and looks up each
+  imported corpus. `source_manifest.json` now records each corpus's
+  repository, commit, license, and files under its key.
+
+---
+
 ## Verse ranges and chapters in lookup_verse
 
 - `lookup_verse` now returns every verse of a range (`Luke 19:1-3`, en dash

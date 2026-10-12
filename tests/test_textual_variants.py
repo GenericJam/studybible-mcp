@@ -616,7 +616,9 @@ def test_upgrade_is_repeatable_and_failure_leaves_original_untouched(
     # Corpus importers have their own tests; stub them so this test exercises
     # the migration, variant import, integrity/FK checks, and file swap.
     monkeypatch.setattr(upgrade_database, "import_biblical_versions", lambda conn, path: (3, 2))
-    monkeypatch.setattr(upgrade_database, "import_josephus", lambda conn, path: 1)
+    monkeypatch.setattr(
+        upgrade_database, "import_available_corpora", lambda conn, root: {"josephus": 1}
+    )
 
     first = upgrade_database.upgrade_in_place(database, data_dir)
     first_snapshot = _variant_snapshot(database)
@@ -628,14 +630,15 @@ def test_upgrade_is_repeatable_and_failure_leaves_original_untouched(
     assert first["migrated_interpretive_cases"] == 1
     assert first["textual_variant_cases"] == second["textual_variant_cases"] == 4
     assert first_snapshot == second_snapshot
+    assert first["josephus_passages"] == second["josephus_passages"] == 1
     assert not database.with_name(database.name + ".upgrade-tmp").exists()
 
     original_bytes = database.read_bytes()
 
-    def failing_josephus(conn, path):
+    def failing_corpora(conn, root):
         raise RuntimeError("corpus import failed")
 
-    monkeypatch.setattr(upgrade_database, "import_josephus", failing_josephus)
+    monkeypatch.setattr(upgrade_database, "import_available_corpora", failing_corpora)
     with pytest.raises(RuntimeError, match="corpus import failed"):
         upgrade_database.upgrade_in_place(database, data_dir)
 

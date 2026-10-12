@@ -28,6 +28,7 @@ from mcp.types import (
 
 import json
 
+from .corpora import CORPORA, all_periods, resolve_citation
 from .database import (
     BOOK_ABBREV_MAP,
     INTERPRETIVE_CASE_KEYS,
@@ -38,11 +39,11 @@ from .database import (
 # Purple book with gold cross icon (32x32 PNG, base64 encoded)
 ICON_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42mNgGOmAEZtgQ9TV/7SwrGGZNiNeB9DKYnwOYcGl6MajG1S1VENOA6s4E4yxounvfw0NDZpYjm4mckgz0drnhMxmIdew5bO3M9w+twfOr5veS5Y5TAOdDUcdMOAOYCE2wWEDqkYueNVEpnpSxwHIqR3ZcmziqMBzNA1QJwqwFTLocT5aEI06YNQBow6gaUGEDUAqGk/qhwCu1iutWsY4+wW0bJYT1S+gZUgMqq7ZKAAA/oE/8EmGTpMAAAAASUVORK5CYII="
 from .tools import (
-    TOOLS, _truncate, format_lexicon_entry, format_verse, format_name_entry,
+    ANCIENT_LOOKUP_LIMIT, TOOLS, _truncate, format_lexicon_entry, format_verse, format_name_entry,
     format_genealogy, format_person_events, format_place_history,
     format_passage_entities, format_connection_path,
     format_enriched_verse, format_biblical_version_comparison,
-    format_ancient_source_results, format_textual_variant_cases,
+    format_ancient_source_results, format_ancient_source_lookup, format_textual_variant_cases,
     mermaid_genealogy, mermaid_connection_path, mermaid_person_timeline,
     mermaid_place_network,
     format_study_notes, format_dictionary_article, format_key_terms,
@@ -559,22 +560,27 @@ async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextCon
     )
 
 
+def _ancient_scope_label(corpus: str | None) -> str:
+    return CORPORA[corpus].label if corpus else "ancient-source"
+
+
 async def handle_search_ancient_sources(args: dict[str, Any]) -> list[TextContent]:
-    """Search Josephus with explicit corpus, period, and biblical-link filters."""
+    """Search registered ancient-source corpora with period and biblical-link filters."""
     query = args.get("query", "").strip()
     if not query:
         return text("Please provide words to search in the ancient source text.")
 
-    corpus = str(args.get("corpus", "josephus")).lower()
-    if corpus != "josephus":
-        return text("Unsupported ancient-source corpus. Available corpus: josephus.")
+    corpus_arg = str(args.get("corpus", "josephus")).lower()
+    if corpus_arg != "all" and corpus_arg not in CORPORA:
+        return text(
+            f"Unsupported ancient-source corpus '{corpus_arg}'. Available corpora: "
+            f"{', '.join(CORPORA)}, or 'all'."
+        )
+    corpus = None if corpus_arg == "all" else corpus_arg
     period = args.get("period")
-    periods = {
-        "biblical", "persian", "second_temple", "hellenistic",
-        "hasmonean", "herodian", "roman", "first_jewish_revolt",
-    }
+    periods = CORPORA[corpus].periods if corpus else all_periods()
     if period and period not in periods:
-        return text(f"Unsupported period: {period}.")
+        return text(f"Unsupported period: {period}. Periods: {', '.join(periods)}.")
     try:
         limit = int(args.get("limit", 4))
     except (TypeError, ValueError):
@@ -591,6 +597,7 @@ async def handle_search_ancient_sources(args: dict[str, Any]) -> list[TextConten
         limit=limit,
     )
     status = result["status"]
+    label = _ancient_scope_label(corpus)
     if status == "invalid_query":
         return text(
             "Please provide words to search in the ancient source text. "
@@ -603,17 +610,17 @@ async def handle_search_ancient_sources(args: dict[str, Any]) -> list[TextConten
             "'Luke 21:5', or 'Luke 21:5-6'."
         )
     if status == "corpus_missing":
+        scope = f"The {label} corpus is" if corpus else "No ancient-source corpus is"
         return text(
-            "The Josephus corpus is not in this database (the "
-            "ancient_source_passages table is missing or empty). Run "
-            "`python scripts/upgrade_database.py` to add it."
+            f"{scope} not in this database (the ancient_source_passages table "
+            "is missing or empty). Run `python scripts/upgrade_database.py` to add it."
         )
     if status == "no_link":
         return text(
-            f"No Josephus passage has an editorial biblical link covering "
+            f"No {label} passage has an editorial biblical link covering "
             f"{biblical_reference}. Biblical links are curated narrative "
             f"overlaps, never inferred from wording; {result['link_count']} "
-            f"links currently cover {result['linked_passage_count']} Josephus "
+            f"links currently cover {result['linked_passage_count']} {label} "
             "passages. Search without biblical_reference to find passages by "
             "wording."
         )
@@ -623,17 +630,111 @@ async def handle_search_ancient_sources(args: dict[str, Any]) -> list[TextConten
             filters.append(f"period={period}")
         scope = f" with filters {', '.join(filters)}" if filters else ""
         return text(
-            "No Josephus passage contains any of the search terms "
+            f"No {label} passage contains any of the search terms "
             f"({', '.join(result['terms'])}){scope}."
         )
     return text(
         format_ancient_source_results(
             query,
             result["rows"],
-            corpus,
+            corpus_arg,
             biblical_reference=biblical_reference,
             period=period,
             match=result["match"],
+        )
+    )
+
+
+def _citable_works() -> str:
+    return "; ".join(
+        f"{corpus.label} ({corpus.key}): "
+        + ", ".join(work.display_title for work in corpus.works)
+        + f", e.g. '{corpus.example_citation}'"
+        for corpus in CORPORA.values()
+    )
+
+
+def _candidate(match) -> str:
+    return f"{match.work.display_title} ({match.corpus.label}, cited by {match.work.locator.name})"
+
+
+async def handle_lookup_ancient_source(args: dict[str, Any]) -> list[TextContent]:
+    """Resolve an ancient-source citation and return the overlapping passages."""
+    citation = str(args.get("citation") or "").strip()
+    if not citation:
+        return text(
+            "Please provide a citation such as 'Antiquities 18.116'. Citable works: "
+            f"{_citable_works()}."
+        )
+    corpus_key = args.get("corpus")
+    if corpus_key and corpus_key not in CORPORA:
+        return text(
+            f"Unsupported ancient-source corpus '{corpus_key}'. Available corpora: "
+            f"{', '.join(CORPORA)}."
+        )
+    corpora = [CORPORA[corpus_key]] if corpus_key else list(CORPORA.values())
+    resolution = resolve_citation(citation, corpora)
+    if resolution.status == "unknown_work":
+        return text(
+            f"Unknown work in citation '{citation}'. Supported corpora and works: "
+            f"{_citable_works()}."
+        )
+    if resolution.status == "ambiguous":
+        return text(
+            f"Ambiguous citation '{citation}': it matches "
+            + "; ".join(_candidate(match) for match in resolution.candidates)
+            + ". Add a collection or work name to choose one."
+        )
+    if resolution.status == "bad_locator":
+        locator = resolution.candidates[0].locator_text
+        problem = f"Could not read the locator '{locator}'" if locator else "No locator"
+        examples = ", ".join(
+            dict.fromkeys(f"'{match.corpus.example_citation}'" for match in resolution.candidates)
+        )
+        return text(
+            f"{problem} in '{citation}'. Expected: "
+            + "; ".join(_candidate(match) for match in resolution.candidates)
+            + f"; e.g. {examples}."
+        )
+
+    match = resolution.match
+    work, corpus = match.work, match.corpus
+    start, end = match.sort_range
+    result = await db.lookup_ancient_passages(
+        corpus.key, work.key, start, end, ANCIENT_LOOKUP_LIMIT
+    )
+    if result["status"] == "corpus_missing":
+        return text(
+            f"The {corpus.label} corpus is not in this database (or was imported "
+            "before citation lookup existed). Run `python scripts/upgrade_database.py` "
+            "to add it."
+        )
+    if result["status"] == "out_of_range":
+        if result["first"] is None:
+            return text(f"No {work.display_title} passages are imported in this database.")
+        nearest = [
+            f"{side} {result[key]}"
+            for side, key in (("preceding", "before"), ("following", "after"))
+            if result[key]
+        ]
+        return text(
+            f"No passage covers {match.heading}. Imported {work.display_title} runs "
+            f"{work.display_title} {work.locator.format_range(result['first'], result['last'])}"
+            + (f"; nearest passages: {', '.join(nearest)}." if nearest else ".")
+        )
+    count = result["total"]
+    note = (
+        f"{corpus.label}, {work.title} ({work.locator.name} "
+        f"{work.locator.format_range(start, end)}): {count} overlapping "
+        f"passage{'s' if count != 1 else ''}"
+    )
+    return text(
+        format_ancient_source_lookup(
+            match.heading,
+            note,
+            result["rows"],
+            count,
+            include_original=args.get("include_original", True),
         )
     )
 
@@ -1487,6 +1588,7 @@ _TOOL_HANDLERS = {
     "lookup_verse": handle_lookup_verse,
     "compare_biblical_versions": handle_compare_biblical_versions,
     "search_ancient_sources": handle_search_ancient_sources,
+    "lookup_ancient_source": handle_lookup_ancient_source,
     "search_lexicon": handle_search_lexicon,
     "get_cross_references": handle_get_cross_references,
     "lookup_name": handle_lookup_name,

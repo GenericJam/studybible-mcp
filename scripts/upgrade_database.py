@@ -4,11 +4,14 @@
 Intended for the deployed-database workflow (download from Fly, upgrade, upload),
 where a full ``build_database.py --rebuild`` is impractical. The upgrade:
 
-1. downloads the pinned LXX/Brenton and Josephus sources (skipping files already
-   present; every file is checksum-verified against its pinned commit),
-2. migrates legacy mixed textual-variant tables to the evidence-separated schema,
-3. imports MT/LXX edition rows, the Josephus corpus, and the bundled
-   manuscript-variant records,
+1. downloads the pinned LXX/Brenton sources and every registered ancient-source
+   corpus (skipping files already present; every file is checksum-verified
+   against its pinned source),
+2. migrates legacy mixed textual-variant tables to the evidence-separated schema
+   and adds new columns to existing tables,
+3. imports MT/LXX edition rows, every downloaded ancient-source corpus (a
+   corpus directory that is present but incomplete fails the upgrade), and the
+   bundled manuscript-variant records,
 4. verifies SQLite integrity and foreign keys.
 
 All work happens on a temporary copy next to the target; the target file is
@@ -33,7 +36,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from study_bible_mcp.database import create_schema
-from study_bible_mcp.parsers.ancient_sources import import_josephus
+from study_bible_mcp.corpora import CORPORA
+from study_bible_mcp.parsers.ancient_sources import import_available_corpora
 from study_bible_mcp.parsers.biblical_versions import import_biblical_versions
 from import_heiser_content import import_nt_ot_lxx_quote_hints, import_textual_variants
 from migrate_textual_variants import migrate
@@ -55,7 +59,6 @@ def _require_sources(data_dir: Path) -> None:
         data_dir / "lxx" / "verse_pairs.jsonl",
         data_dir / "lxx" / "morphology",
         data_dir / "lxx" / "brenton",
-        data_dir / "ancient_sources" / "josephus",
         data_dir / "heiser" / "variants",
     )
     missing = [str(path) for path in required if not path.exists()]
@@ -78,7 +81,7 @@ def upgrade(database: Path, data_dir: Path) -> dict[str, int]:
         cases, interpretive, hints = migrate(conn)
         create_schema(conn)
         mt_rows, lxx_rows = import_biblical_versions(conn, data_dir)
-        josephus = import_josephus(conn, data_dir / "ancient_sources" / "josephus")
+        corpora = import_available_corpora(conn, data_dir / "ancient_sources")
         variants = import_textual_variants(conn, data_dir / "heiser" / "variants")
         bundled_hints = 0
         hints_path = data_dir / "heiser" / "lxx_quote_hints.json"
@@ -87,9 +90,16 @@ def upgrade(database: Path, data_dir: Path) -> dict[str, int]:
         conn.execute("ANALYZE")
         conn.commit()
 
-        if not mt_rows or not lxx_rows or not josephus:
+        if not mt_rows or not lxx_rows:
             raise click.ClickException(
-                f"Import produced no rows (MT={mt_rows}, LXX={lxx_rows}, Josephus={josephus})."
+                f"Import produced no rows (MT={mt_rows}, LXX={lxx_rows})."
+            )
+        skipped = [key for key, count in corpora.items() if count is None]
+        if skipped:
+            click.echo(
+                "Skipped ancient-source corpora not downloaded under "
+                f"{data_dir / 'ancient_sources'}: "
+                + ", ".join(f"{key} ({CORPORA[key].data_dir})" for key in skipped)
             )
         variant_cases = conn.execute(
             "SELECT COUNT(*) FROM textual_variant_cases"
@@ -111,7 +121,7 @@ def upgrade(database: Path, data_dir: Path) -> dict[str, int]:
         "quotation_hints": hints,
         "mt_rows": mt_rows,
         "lxx_rows": lxx_rows,
-        "josephus_passages": josephus,
+        **{f"{key}_passages": count for key, count in corpora.items() if count is not None},
         "bundled_variant_cases": variants,
         "bundled_quotation_hints": bundled_hints,
         "textual_variant_cases": variant_cases,

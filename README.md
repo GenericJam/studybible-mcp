@@ -227,15 +227,18 @@ Septuagint table tells you to run `python scripts/upgrade_database.py`.
 
 #### `search_ancient_sources`
 
-Search licensed primary-source corpora for Jewish history. The initial
-`josephus` corpus contains 2,304 Whiston sections from *Jewish Antiquities*,
+Search licensed primary-source corpora for Jewish history. `corpus` is any
+registered corpus key or `all`; the registry (`src/study_bible_mcp/corpora/`)
+currently holds `josephus`: 2,304 Whiston sections from *Jewish Antiquities*,
 *The Jewish War*, *Life*, and *Against Apion*. Each section is paired with
 every Niese Greek section it spans and referenced as a Niese span plus
 Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Each
-result shows up to 1,500 characters of English around the first match and a
-shorter Greek excerpt (match-centred when the query is Greek); the edition,
-translation, license, and pinned source are listed once at the end. Up to 4
-passages are returned by default.
+result names its corpus, work, and citation, and shows up to 1,500 characters
+of English around the first match and a shorter original-language excerpt
+(match-centred when the query is in the original's script; a passage without
+openly licensed English shows its original instead); the edition, translation,
+license, and pinned source are listed once at the end. Up to 4 passages are
+returned by default.
 
 ```text
 search_ancient_sources(
@@ -249,16 +252,44 @@ search_ancient_sources(
 
 Only the passage text is searched, so a word that appears only in a work
 title (`Jewish`, `War`, `Life`) does not match every passage of that work.
-English search is stemmed (`build` matches `building`); Greek search ignores
-accents, breathings, and case (`βαπτισμω` matches `βαπτισμῷ`). Passages
-containing every query word come first; when none do, passages matching any
-word are returned with an explicit note. `biblical_reference` accepts a
-chapter, verse, or verse range (`Luke 21`, `Luke 21:5`, `Luke 21:5-6`) and
-filters to 33 curated narrative-overlap links, each checked against the linked
-passage text. Period tags, biblical links, and Whiston's chapter headings are
-labelled editorial metadata; they are not presented as claims made by
-Josephus. Empty results say whether the corpus is missing, the reference is
-unsupported, the reference has no curated link, or nothing matched.
+English search is stemmed (`build` matches `building`); Greek, Hebrew, and
+Aramaic search ignores accents, breathings, vowel points, cantillation, and case
+(`βαπτισμω` matches `βαπτισμῷ`). Passages containing every query word come
+first; when none do, passages matching any word are returned with an explicit
+note. `biblical_reference` accepts a chapter, verse, or verse range (`Luke 21`,
+`Luke 21:5`, `Luke 21:5-6`) and filters to curated narrative-overlap links (33
+for Josephus), each checked against the linked passage text. Period tags,
+biblical links, and editorial chapter headings (Whiston's, for Josephus) are
+labelled editorial metadata; they are not presented as claims made by the
+ancient author. Empty results say whether the corpus is missing, the reference
+is unsupported, the reference has no curated link, or nothing matched.
+
+#### `lookup_ancient_source`
+
+Read an ancient-source passage by its citation. A citation is a work name or
+abbreviation plus a locator in that work's numbering; an author prefix is
+optional. For Josephus: `Antiquities`/`Ant.`/`A.J.`, `War`/`B.J.`/`J.W.`, and
+`Against Apion`/`C. Ap.` take Niese `book.section`; `Life`/`Vita` takes a
+section.
+
+```text
+lookup_ancient_source(citation="Ant. 15.320")            # inside Antiquities 15.317–322
+lookup_ancient_source(citation="Josephus, War 6.316")
+lookup_ancient_source(citation="Antiquities 18.116-121", include_original=False)
+```
+
+A locator inside a longer passage returns the passage containing it; a range
+returns every overlapping passage in citation order, at most 10, with a note
+when more exist. Each passage shows its corpus, work, citation, edition,
+translation, license, source, and curated biblical links. When registered
+works share a title (as the planned rabbinic collections will), a collection
+prefix such as `Mishnah` or `Bavli`, or the locator grammar itself (a daf such
+as `3b` fits only a Talmud tractate), selects one.
+Unknown works list the supported works, ambiguous citations list the
+candidates, unreadable locators name the expected grammar, a locator outside
+the imported text names the imported range and the nearest passages, and a
+database without the corpus (or imported before citation lookup) is told to
+run `python scripts/upgrade_database.py`.
 
 #### 2. `word_study`
 
@@ -892,19 +923,26 @@ studybible-mcp/
 │   ├── database.py            # SQLite queries (async)
 │   ├── tools.py               # MCP tool definitions and output formatters
 │   ├── hermeneutics.py        # Genre detection & interpretation
+│   ├── corpora/               # Ancient-source corpus registry
+│   │   ├── __init__.py        # CORPORA registry (one line per corpus)
+│   │   ├── base.py            # Corpus, Work, Collection, BiblicalLink types
+│   │   ├── locators.py        # Citation locator grammars and sort keys
+│   │   ├── citations.py       # Citation-to-work resolution
+│   │   ├── download.py        # Checksum-verified download helpers
+│   │   └── josephus.py        # Josephus TEI parser, works, and links
 │   └── parsers/
 │       ├── lexicon.py         # TFLSJ, BDB, Abbott-Smith, TBESG, TBESH parsers
 │       ├── aquifer.py         # BibleAquifer JSON parser
 │       ├── acai.py            # ACAI entity annotation parser
 │       ├── ane_context.py     # ANE cultural context parser
 │       ├── biblical_versions.py # MT/LXX text, morphology, and versification
-│       ├── ancient_sources.py # Josephus TEI parser and corpus metadata
+│       ├── ancient_sources.py # Generic corpus importer (passages, FTS, links)
 │       ├── tagged_text.py     # TAGNT/TAHOT morphology parsers
 │       └── proper_names.py    # TIPNR name parser
 ├── scripts/
 │   ├── download_stepbible.py  # Download base source data (--aquifer flag)
 │   ├── download_biblical_versions.py # Download pinned LXX/Brenton sources
-│   ├── download_ancient_sources.py # Download pinned Josephus sources
+│   ├── download_ancient_sources.py # Download every registered ancient corpus
 │   ├── build_database.py      # Build SQLite database
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
@@ -969,9 +1007,24 @@ Brenton's Greek is stored only for the verses where it differs from Rahlfs
 but incomplete (any of the 59 morphology books, the mapping, a required Brenton
 English or Greek book, or a manifest-listed file is missing or truncated).
 
+### Ancient sources
+
+Each corpus is a module in `src/study_bible_mcp/corpora/` registered in
+`CORPORA`; its pinned files live in `data/ancient_sources/<corpus>/` and
+`source_manifest.json` records every verified file. `build_database.py` and
+`upgrade_database.py` import every corpus whose directory exists and fail if a
+present directory is incomplete. All corpora share `ancient_source_passages`,
+whose `sort_start`/`sort_end` keys (in each work's citation grammar) back
+`lookup_ancient_source`, and whose `original_license`, `translation_license`,
+and combined `license` record provenance per passage. Each import replaces only
+its own corpus inside a savepoint after validating every passage and link, and
+merges the FTS index so repeated upgrades do not grow it. Indexed originals are
+folded for search: Greek accents and breathings and Hebrew/Aramaic vowel points
+and cantillation are removed and case is folded, in the index and the query.
+
 ### Josephus
 
-`search_ancient_sources` uses all four Josephus works from
+The `josephus` corpus uses all four Josephus works from
 [PerseusDL canonical-greekLit](https://github.com/PerseusDL/canonical-greekLit),
 pinned to commit `01b725d835e6e733062ffd79e0efdbae1ba06e5c`. The English TEI
 has one division per Whiston section, labelled with the Niese section where it

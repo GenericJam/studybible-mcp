@@ -35,8 +35,10 @@ This guide covers running your own instance of the Study Bible MCP server.
    ```
    The additional commands download the pinned 59-book Rahlfs morphology
    corpus, explicit MT/LXX versification mappings, public-domain Brenton English
-   and Greek USFM, and the licensed Josephus Greek/English corpus. They validate
-   source checksums before import.
+   and Greek USFM, and every registered ancient-source corpus (currently the
+   licensed Josephus Greek/English corpus) into `data/ancient_sources/<corpus>/`.
+   They validate source checksums before import; the build imports each
+   downloaded corpus and fails on an incomplete one.
 5. **Build the database**
    ```bash
    python scripts/build_database.py
@@ -53,11 +55,12 @@ This guide covers running your own instance of the Study Bible MCP server.
    ```bash
    python scripts/upgrade_database.py --database db/study_bible.db
    ```
-   The upgrade downloads the pinned LXX/Brenton and Josephus sources (present
-   files are skipped and every file is checksum-verified), migrates the legacy
-   mixed `textual_variants` tables, imports MT/LXX, Josephus, and the bundled
-   variant cases, and runs SQLite integrity and foreign-key checks on a
-   temporary copy. The original file is replaced only when everything
+   The upgrade downloads the pinned LXX/Brenton sources and every registered
+   ancient-source corpus (present files are skipped and every file is
+   checksum-verified), migrates the legacy mixed `textual_variants` tables and
+   adds new columns, imports MT/LXX, every downloaded ancient-source corpus,
+   and the bundled variant cases, and runs SQLite integrity and foreign-key
+   checks on a temporary copy. The original file is replaced only when everything
    succeeds, and re-running is safe. Pass `--offline` to use sources already
    under `data/`. A server pointed at a database that has not been upgraded
    answers `get_textual_variant` with a message to run this script.

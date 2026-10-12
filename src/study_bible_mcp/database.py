@@ -243,15 +243,26 @@ _BOOK_CODES = {code.lower(): code for code in BOOK_ABBREV_MAP.values()}
 _FTS_OPERATORS = {"AND", "OR", "NOT", "NEAR"}
 
 
-def fold_ancient_search_text(text: str) -> str:
-    """Fold accents and case for ancient-source search (NFC, NFD, drop marks, casefold).
+def _strip_marks(text: str) -> str:
+    """Drop every nonspacing mark after canonical decomposition, then recompose.
 
-    Applied to the indexed Greek and to every query token, so polytonic accents,
-    breathings, iota subscripts, and final sigma do not affect matching.
+    Removes Greek accents, breathings and iota subscripts, and Hebrew/Aramaic
+    niqqud, cantillation, and the combining grapheme joiner.
     """
     decomposed = unicodedata.normalize("NFD", unicodedata.normalize("NFC", text))
-    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
-    return unicodedata.normalize("NFC", stripped.casefold())
+    return unicodedata.normalize(
+        "NFC", "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+    )
+
+
+def fold_ancient_search_text(text: str) -> str:
+    """Fold marks and case for ancient-source search (NFD, drop marks, casefold, NFC).
+
+    Applied to every indexed Greek, Hebrew, or Aramaic original and to every
+    query token, so polytonic accents, breathings, iota subscripts, final
+    sigma, niqqud, and cantillation do not affect matching.
+    """
+    return unicodedata.normalize("NFC", _strip_marks(text).casefold())
 
 
 def parse_ancient_biblical_reference(reference: str) -> tuple[str, int, int] | None:
@@ -1833,25 +1844,28 @@ class StudyBibleDB:
     async def search_ancient_sources(
         self,
         query: str,
-        corpus: str = "josephus",
+        corpus: str | None = "josephus",
         biblical_reference: str | None = None,
         period: str | None = None,
         limit: int = 4,
     ) -> dict:
         """Full-text search licensed ancient sources with optional indexed filters.
 
-        Only the passage text (English and folded Greek) is searched; the work
-        title and reference columns are display metadata, so a query word that
-        only appears in a title ("Jewish", "War", "Life") does not match.
-
+        ``corpus`` is a registered corpus key, or None for every corpus.
+        Only the passage text (English and the folded original) is searched;
+        the work title and reference columns are display metadata, so a query
+        word that only appears in a title ("Jewish", "War", "Life") does not
+        match.
         Returns a dict with ``status`` (``ok``, ``invalid_query``,
         ``invalid_reference``, ``corpus_missing``, ``no_link``, ``no_match``),
         ``rows``, ``terms`` (the folded search terms), ``match`` (``all`` when
         every term matched, ``any`` for the any-term fallback), and for
-        ``no_link`` the corpus-wide ``link_count`` and ``linked_passage_count``.
+        ``no_link`` the ``link_count`` and ``linked_passage_count`` in scope.
         """
         terms: list[str] = []
-        for token in re.findall(r"\w+", unicodedata.normalize("NFC", query)):
+        # Marks are stripped before tokenizing: Python's \w does not match
+        # Hebrew niqqud or cantillation, which would otherwise split words.
+        for token in re.findall(r"\w+", _strip_marks(query)):
             if token in _FTS_OPERATORS:
                 continue
             for term in re.findall(r"\w+", fold_ancient_search_text(token)):
@@ -1869,10 +1883,11 @@ class StudyBibleDB:
                 result["status"] = "invalid_reference"
                 return result
 
+        corpus_condition, corpus_params = ("p.corpus = ?", [corpus]) if corpus else ("1", [])
         try:
             present = await self._fetchone(
-                "SELECT 1 FROM ancient_source_passages WHERE corpus = ? LIMIT 1",
-                (corpus,),
+                f"SELECT 1 FROM ancient_source_passages p WHERE {corpus_condition} LIMIT 1",
+                corpus_params,
             )
         except sqlite3.OperationalError:
             present = None
@@ -1880,8 +1895,8 @@ class StudyBibleDB:
             result["status"] = "corpus_missing"
             return result
 
-        where = ["ancient_source_passages_fts MATCH ?", "p.corpus = ?"]
-        params: list[Any] = [corpus]
+        where = ["ancient_source_passages_fts MATCH ?", corpus_condition]
+        params: list[Any] = list(corpus_params)
         if period:
             where.append("(',' || p.period_tags || ',') LIKE ?")
             params.append(f"%,{period},%")
@@ -1893,24 +1908,25 @@ class StudyBibleDB:
                          AND bl.sort_start <= ?
                          AND bl.sort_end >= ?
                    )"""
+            link_params = (link_range[0], link_range[2], link_range[1])
             linked = await self._fetchone(
                 f"""SELECT 1 FROM ancient_source_passages p
-                    WHERE p.corpus = ? AND {link_condition} LIMIT 1""",
-                (corpus, link_range[0], link_range[2], link_range[1]),
+                    WHERE {corpus_condition} AND {link_condition} LIMIT 1""",
+                [*corpus_params, *link_params],
             )
             if linked is None:
                 coverage = await self._fetchone(
-                    """SELECT COUNT(*) AS link_count,
+                    f"""SELECT COUNT(*) AS link_count,
                               COUNT(DISTINCT bl.passage_id) AS linked_passage_count
                        FROM ancient_source_biblical_links bl
                        JOIN ancient_source_passages p ON p.id = bl.passage_id
-                       WHERE p.corpus = ?""",
-                    (corpus,),
+                       WHERE {corpus_condition}""",
+                    corpus_params,
                 )
                 result.update(status="no_link", **coverage)
                 return result
             where.append(link_condition)
-            params.extend((link_range[0], link_range[2], link_range[1]))
+            params.extend(link_params)
 
         for match, operator in (("all", " AND "), ("any", " OR ")):
             if match == "any" and len(terms) == 1:
@@ -1923,8 +1939,7 @@ class StudyBibleDB:
                     JOIN ancient_source_passages p
                       ON p.id = ancient_source_passages_fts.passage_id
                     WHERE {' AND '.join(where)}
-                    ORDER BY rank, p.work_title, p.book_number,
-                             CAST(p.section_number AS INTEGER)
+                    ORDER BY rank, p.corpus, p.work_title, p.sort_start
                     LIMIT ?""",
                 [match_query, *params, limit],
             )
@@ -1936,6 +1951,72 @@ class StudyBibleDB:
             return result
         result["rows"] = await self._attach_ancient_biblical_links(rows)
         return result
+
+    async def lookup_ancient_passages(
+        self,
+        corpus: str,
+        work_key: str,
+        sort_start: int,
+        sort_end: int,
+        limit: int,
+    ) -> dict:
+        """Passages of one work whose sort range overlaps ``[sort_start, sort_end]``.
+
+        Returns ``status`` ``corpus_missing`` (no rows with sort keys, e.g. a
+        corpus imported before the multi-corpus schema), ``out_of_range`` (with
+        the work's imported ``first``/``last`` keys and the nearest ``before``
+        and ``after`` references), or ``ok`` with ``rows`` in citation order
+        (at most ``limit``) and ``total``.
+        """
+        try:
+            present = await self._fetchone(
+                """SELECT 1 FROM ancient_source_passages
+                   WHERE corpus = ? AND sort_start IS NOT NULL LIMIT 1""",
+                (corpus,),
+            )
+        except sqlite3.OperationalError:
+            present = None
+        if present is None:
+            return {"status": "corpus_missing"}
+
+        work = "corpus = ? AND work_key = ?"
+        overlap = f"{work} AND sort_start <= ? AND sort_end >= ?"
+        params = (corpus, work_key, sort_end, sort_start)
+        total = (await self._fetchone(
+            f"SELECT COUNT(*) AS total FROM ancient_source_passages WHERE {overlap}", params
+        ))["total"]
+        if not total:
+            bounds = await self._fetchone(
+                f"""SELECT MIN(sort_start) AS first, MAX(sort_end) AS last
+                    FROM ancient_source_passages WHERE {work}""",
+                (corpus, work_key),
+            )
+            before = await self._fetchone(
+                f"""SELECT reference FROM ancient_source_passages
+                    WHERE {work} AND sort_end < ? ORDER BY sort_end DESC LIMIT 1""",
+                (corpus, work_key, sort_start),
+            )
+            after = await self._fetchone(
+                f"""SELECT reference FROM ancient_source_passages
+                    WHERE {work} AND sort_start > ? ORDER BY sort_start LIMIT 1""",
+                (corpus, work_key, sort_end),
+            )
+            return {
+                "status": "out_of_range",
+                **bounds,
+                "before": before["reference"] if before else None,
+                "after": after["reference"] if after else None,
+            }
+        rows = await self._fetchall(
+            f"""SELECT * FROM ancient_source_passages WHERE {overlap}
+                ORDER BY sort_start, sort_end LIMIT ?""",
+            (*params, limit),
+        )
+        return {
+            "status": "ok",
+            "rows": await self._attach_ancient_biblical_links(rows),
+            "total": total,
+        }
 
     async def _attach_ancient_biblical_links(self, rows: list[dict]) -> list[dict]:
         """Attach editorial biblical links to ancient-source passage rows."""
@@ -2632,7 +2713,12 @@ def create_schema(conn: sqlite3.Connection):
         CREATE INDEX IF NOT EXISTS idx_bvv_edition
             ON biblical_version_verses(edition_book, edition_chapter, edition_verse);
 
-        -- Licensed ancient-source passages and full-text index.
+        -- Licensed ancient-source passages and full-text index. One table for
+        -- every registered corpus (study_bible_mcp.corpora). book_number,
+        -- section_number and section_end are Josephus's Niese numbering (0/''
+        -- for other corpora); sort_start/sort_end are the generic citation
+        -- keys in each work's locator grammar. Columns added after the first
+        -- release are nullable so ensure_ancient_source_columns can add them.
         CREATE TABLE IF NOT EXISTS ancient_source_passages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             corpus TEXT NOT NULL,
@@ -2652,6 +2738,12 @@ def create_schema(conn: sqlite3.Connection):
             translation TEXT,
             license TEXT NOT NULL,
             source_url TEXT NOT NULL,
+            collection TEXT,
+            sort_start INTEGER,
+            sort_end INTEGER,
+            original_language TEXT,
+            original_license TEXT,
+            translation_license TEXT,
             UNIQUE(corpus, work_key, reference)
         );
         CREATE INDEX IF NOT EXISTS idx_asp_corpus_period
@@ -2851,6 +2943,35 @@ def create_schema(conn: sqlite3.Connection):
             conn.execute(f"ALTER TABLE lexicon ADD COLUMN {col}")
         except sqlite3.OperationalError:
             pass  # Column already exists
+    conn.commit()
+    ensure_ancient_source_columns(conn)
+
+
+# Columns added to ancient_source_passages after the Josephus-only release.
+_ANCIENT_SOURCE_ADDED_COLUMNS = (
+    ("collection", "TEXT"),
+    ("sort_start", "INTEGER"),
+    ("sort_end", "INTEGER"),
+    ("original_language", "TEXT"),
+    ("original_license", "TEXT"),
+    ("translation_license", "TEXT"),
+)
+
+
+def ensure_ancient_source_columns(conn: sqlite3.Connection) -> None:
+    """Add the multi-corpus columns and locator index to an existing table (idempotent).
+
+    Rows imported before the columns existed keep NULL sort keys until their
+    corpus is re-imported (``scripts/upgrade_database.py``).
+    """
+    present = {row[1] for row in conn.execute("PRAGMA table_info(ancient_source_passages)")}
+    for column, sql_type in _ANCIENT_SOURCE_ADDED_COLUMNS:
+        if column not in present:
+            conn.execute(f"ALTER TABLE ancient_source_passages ADD COLUMN {column} {sql_type}")
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_asp_locator
+           ON ancient_source_passages(corpus, work_key, sort_start, sort_end)"""
+    )
     conn.commit()
 
 
