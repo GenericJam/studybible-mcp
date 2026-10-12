@@ -13,9 +13,11 @@ query, and every distinct theology_content.url in the database. A link is broken
 when it answers with status >= 400 or a network error. HEAD is tried first and
 GET is used when HEAD fails, because some sites reject HEAD. A timeout is
 retried once with a longer limit (slow hosts are not dead ones); a link that
-still times out is reported as TIMEOUT and fails the run like a broken link. A
-catalogue entry marked "link_check": "skip" (with a "link_check_reason") is
-reported as skipped; use it only for sites that block automated clients.
+still times out is reported as TIMEOUT and fails the run like a broken link,
+except on a host in LINK_CHECK_SLOW_HOSTS, which gets an even longer retry and
+is only reported as SLOW. A catalogue entry marked "link_check": "skip" (with a
+"link_check_reason") is reported as skipped; use it only for sites that block
+automated clients.
 """
 
 from __future__ import annotations
@@ -157,13 +159,30 @@ async def run(db_path: Path) -> bool:
 LINK_CHECK_SAMPLE_QUERY = "Psalm 82"
 LINK_CHECK_CONCURRENCY = 8
 LINK_CHECK_TIMEOUT = 20.0
-# Some hosts (e.g. drmsh.com) answer in 20-30 s; a timed-out link is retried
-# once with this longer limit before it is reported.
+# Some hosts answer in 20-30 s; a timed-out link is retried once with this
+# longer limit before it is reported.
 LINK_CHECK_RETRY_TIMEOUT = 60.0
+# Hosts known to be slow but working (drmsh.com has answered in 31-57 s): their
+# retry gets a longer limit, and a timeout that still persists is reported as
+# SLOW, a warning that does not fail the run. Matched on the host or a parent.
+LINK_CHECK_SLOW_HOSTS = {"drmsh.com": 180.0}
 _USER_AGENT = "Mozilla/5.0 (compatible; studybible-mcp link checker; +https://github.com/djayatillake/studybible-mcp)"
 
 # Returns the final HTTP status for a URL; raises httpx.HTTPError on network failure.
 Fetcher = Callable[[str], Awaitable[int]]
+
+
+def _slow_host_limit(url: str) -> float | None:
+    """The retry limit for a known-slow host, or None for any other host."""
+    host = (httpx.URL(url).host or "").lower()
+    for slow, limit in LINK_CHECK_SLOW_HOSTS.items():
+        if host == slow or host.endswith(f".{slow}"):
+            return limit
+    return None
+
+
+def retry_timeout(url: str) -> float:
+    return _slow_host_limit(url) or LINK_CHECK_RETRY_TIMEOUT
 
 
 @dataclass
@@ -178,6 +197,15 @@ class LinkResult:
     def broken(self) -> bool:
         """Any failure, including a timeout that persisted through the retry."""
         return self.error is not None or self.status is None or self.status >= 400
+
+    @property
+    def slow(self) -> bool:
+        """A persistent timeout on a host known to be slow but working."""
+        return self.timed_out and _slow_host_limit(self.url) is not None
+
+    @property
+    def fails_run(self) -> bool:
+        return self.broken and not self.slow
 
 
 def collect_link_targets(db_path: Path | None) -> tuple[dict[str, list[str]], list[str]]:
@@ -205,17 +233,23 @@ def collect_link_targets(db_path: Path | None) -> tuple[dict[str, list[str]], li
     return targets, skipped
 
 
-def make_http_fetcher(client: httpx.AsyncClient) -> Fetcher:
-    """HEAD first; fall back to a streamed GET when HEAD errors or is refused."""
+def make_http_fetcher(
+    client: httpx.AsyncClient, timeout_for: Callable[[str], float] | None = None
+) -> Fetcher:
+    """HEAD first; fall back to a streamed GET when HEAD errors or is refused.
+
+    ``timeout_for`` gives a per-URL timeout; otherwise the client's applies.
+    """
 
     async def fetch(url: str) -> int:
+        options = {"timeout": timeout_for(url)} if timeout_for else {}
         try:
-            response = await client.head(url)
+            response = await client.head(url, **options)
             if response.status_code < 400:
                 return response.status_code
         except httpx.HTTPError:
             pass
-        async with client.stream("GET", url) as response:
+        async with client.stream("GET", url, **options) as response:
             return response.status_code
 
     return fetch
@@ -264,16 +298,23 @@ async def run_link_check(db_path: Path) -> bool:
     targets, skipped = collect_link_targets(db_path)
     logging.getLogger("httpx").setLevel(logging.WARNING)  # the report below lists every URL
     client_options = {"follow_redirects": True, "headers": {"User-Agent": _USER_AGENT}}
-    async with httpx.AsyncClient(timeout=LINK_CHECK_TIMEOUT, **client_options) as client, \
-            httpx.AsyncClient(timeout=LINK_CHECK_RETRY_TIMEOUT, **client_options) as slow_client:
+    async with httpx.AsyncClient(timeout=LINK_CHECK_TIMEOUT, **client_options) as client:
         results = await check_links(
-            targets, make_http_fetcher(client), retry=make_http_fetcher(slow_client)
+            targets,
+            make_http_fetcher(client),
+            retry=make_http_fetcher(client, timeout_for=retry_timeout),
         )
 
-    broken = [r for r in results if r.broken]
-    timed_out = [r for r in broken if r.timed_out]
+    failing = [r for r in results if r.fails_run]
+    timed_out = [r for r in failing if r.timed_out]
+    slow = [r for r in results if r.slow]
     for result in sorted(results, key=lambda r: r.url):
-        label = "TIMEOUT" if result.timed_out else "BROKEN " if result.broken else "OK     "
+        if result.slow:
+            label = "SLOW   "
+        elif result.timed_out:
+            label = "TIMEOUT"
+        else:
+            label = "BROKEN " if result.broken else "OK     "
         outcome = result.error or result.status
         print(f"{label} {outcome} {result.url}")
         if result.broken:
@@ -281,11 +322,13 @@ async def run_link_check(db_path: Path) -> bool:
                 print(f"          from {origin}")
     for note in skipped:
         print(f"SKIP    {note}")
-    print(f"\n{len(results)} links checked: {len(results) - len(broken)} ok, "
-          f"{len(broken) - len(timed_out)} broken, {len(timed_out)} timed out "
+    ok = len(results) - len(failing) - len(slow)
+    print(f"\n{len(results)} links checked: {ok} ok, "
+          f"{len(failing) - len(timed_out)} broken, {len(timed_out)} timed out "
           f"(no response within {LINK_CHECK_RETRY_TIMEOUT:.0f} s on retry), "
+          f"{len(slow)} slow (known-slow host, warning only), "
           f"{len(skipped)} catalogue entries skipped")
-    return not broken
+    return not failing
 
 
 def main() -> None:

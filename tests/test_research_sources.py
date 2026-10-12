@@ -199,6 +199,52 @@ class TestLinkChecker:
         assert not results["https://slow"].broken
         assert results["https://dead"].broken and results["https://dead"].timed_out
 
+    async def test_known_slow_host_gets_longer_retry_and_only_warns(self, smoke, monkeypatch):
+        monkeypatch.setattr(smoke, "LINK_CHECK_SLOW_HOSTS", {"slow.example": 180.0})
+        retry_limits = {}
+
+        async def fetch(url):
+            raise httpx.ReadTimeout("slow")
+
+        async def retry(url):
+            retry_limits[url] = smoke.retry_timeout(url)
+            raise httpx.ReadTimeout("still slow")
+
+        known, subdomain = "https://slow.example/a", "https://www.slow.example/b"
+        other, lookalike = "https://other.example/c", "https://notslow.example/d"
+        targets = {url: ["x"] for url in (known, subdomain, other, lookalike)}
+        results = {r.url: r for r in await smoke.check_links(targets, fetch, retry=retry)}
+
+        assert retry_limits[known] == retry_limits[subdomain] == 180.0
+        assert retry_limits[other] == retry_limits[lookalike] == smoke.LINK_CHECK_RETRY_TIMEOUT
+        assert results[known].slow and not results[known].fails_run
+        assert results[subdomain].slow and not results[subdomain].fails_run
+        assert not results[other].slow and results[other].fails_run
+        assert not results[lookalike].slow and results[lookalike].fails_run
+
+    async def test_known_slow_host_still_fails_when_actually_broken(self, smoke, monkeypatch):
+        monkeypatch.setattr(smoke, "LINK_CHECK_SLOW_HOSTS", {"slow.example": 180.0})
+
+        async def fetch(url):
+            return 404
+
+        results = await smoke.check_links({"https://slow.example/gone": ["x"]}, fetch)
+
+        assert not results[0].slow and results[0].fails_run
+
+    async def test_per_url_timeout_reaches_the_request(self, smoke):
+        seen = []
+
+        def handler(request):
+            seen.append(request.extensions["timeout"]["read"])
+            return httpx.Response(200)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0) as client:
+            fetch = smoke.make_http_fetcher(client, timeout_for=lambda url: 99.0)
+            assert await fetch("https://example.org/") == 200
+
+        assert seen == [99.0]
+
     async def test_get_fallback_when_head_refused(self, smoke):
         def handler(request):
             if request.url.path == "/no-head":

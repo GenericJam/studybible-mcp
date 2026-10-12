@@ -27,7 +27,11 @@ for perspectives, journals and primary texts that they do not cover.
 catalogue URL, every search template filled with a sample query, and
 every distinct `theology_content.url`. It falls back from `HEAD` to
 `GET`, reports broken links (status 400 or above, or a network error)
-with their origin, and exits non-zero when any link is broken. Sites
+with their origin, and exits non-zero when any link is broken. A
+timed-out link is retried once with a 60-second limit and reported as
+`TIMEOUT` if it persists. Hosts known to be slow but working
+(`drmsh.com`, 31-57 s) get a 180-second retry, and a persistent timeout
+there is reported as `SLOW`, a warning that does not fail the run. Sites
 that block automated clients carry an explicit `link_check: "skip"`
 with a reason.
 
