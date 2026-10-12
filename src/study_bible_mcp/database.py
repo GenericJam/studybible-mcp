@@ -1797,18 +1797,53 @@ class StudyBibleDB:
         return rows
 
 
-    async def get_textual_variants(self, reference: str) -> list[dict]:
-        """Get textual variants for a reference, with manuscript witnesses."""
+    async def get_textual_variant_cases(self, reference: str) -> list[dict]:
+        """Get textual variant cases with each kind of claim kept separate."""
         normalized = self._normalize_reference(reference)
-        variants = await self._fetchall(
-            "SELECT * FROM textual_variants WHERE reference = ?", (normalized,)
+        cases = await self._fetchall(
+            "SELECT * FROM textual_variant_cases WHERE reference = ? ORDER BY id",
+            (normalized,),
         )
-        for v in variants:
-            witnesses = await self._fetchall(
-                "SELECT * FROM manuscript_witnesses WHERE variant_id = ?", (v["id"],)
+        for case in cases:
+            case_id = case["id"]
+            readings = await self._fetchall(
+                """SELECT * FROM textual_variant_readings
+                   WHERE case_id = ? ORDER BY id""",
+                (case_id,),
             )
-            v["witnesses"] = witnesses
-        return variants
+            for reading in readings:
+                reading["witnesses"] = await self._fetchall(
+                    """SELECT witness, approximate_date, source_citation, source_url
+                       FROM textual_variant_witnesses
+                       WHERE reading_id = ? ORDER BY id""",
+                    (reading["id"],),
+                )
+            case["manuscript_evidence"] = readings
+            case["critical_judgments"] = await self._fetchall(
+                """SELECT judgment, attribution, source_citation, source_url
+                   FROM textual_critical_judgments
+                   WHERE case_id = ? ORDER BY id""",
+                (case_id,),
+            )
+            case["theological_interpretations"] = await self._fetchall(
+                """SELECT interpretation, attribution, source_citation, source_url
+                   FROM textual_theological_interpretations
+                   WHERE case_id = ? ORDER BY id""",
+                (case_id,),
+            )
+            case["author_specific_claims"] = await self._fetchall(
+                """SELECT author, claim, source_citation, source_url
+                   FROM textual_author_claims
+                   WHERE case_id = ? ORDER BY id""",
+                (case_id,),
+            )
+            case["translation_decisions"] = await self._fetchall(
+                """SELECT translation, preferred_reading, rationale
+                   FROM textual_translation_decisions
+                   WHERE case_id = ? ORDER BY id""",
+                (case_id,),
+            )
+        return cases
 
     async def get_nt_ot_lxx_quote_hints(self, reference: str) -> list[dict]:
         """Return NT↔OT LXX-form quotation hints for either the NT or OT side.
@@ -2400,41 +2435,79 @@ def create_schema(conn: sqlite3.Connection):
         CREATE INDEX IF NOT EXISTS idx_asbl_biblical
             ON ancient_source_biblical_links(biblical_book, sort_start, sort_end);
 
-        -- Textual variants (MT vs DSS/LXX/SP)
-        CREATE TABLE IF NOT EXISTS textual_variants (
+        -- Textual variants: observed readings and interpretive claims are stored
+        -- independently so the API cannot present a scholar's conclusion as
+        -- manuscript evidence.
+        CREATE TABLE IF NOT EXISTS textual_variant_cases (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             reference TEXT NOT NULL,
             book TEXT NOT NULL,
             chapter INTEGER,
             verse INTEGER,
-            mt_reading TEXT NOT NULL,
-            mt_hebrew TEXT,
-            variant_source TEXT NOT NULL,
-            variant_reading TEXT NOT NULL,
-            variant_original TEXT,
-            variant_significance TEXT,
-            heiser_analysis TEXT,
-            heiser_content_id INTEGER,
-            scholarly_consensus TEXT,
-            preferred_for_hlt TEXT,
-            hlt_rationale TEXT,
-            UNIQUE(reference, variant_source)
+            case_key TEXT NOT NULL,
+            significance TEXT,
+            UNIQUE(reference, case_key)
         );
-        CREATE INDEX IF NOT EXISTS idx_tv_ref ON textual_variants(reference);
-        CREATE INDEX IF NOT EXISTS idx_tv_book ON textual_variants(book);
+        CREATE INDEX IF NOT EXISTS idx_tvc_ref ON textual_variant_cases(reference);
+        CREATE INDEX IF NOT EXISTS idx_tvc_book ON textual_variant_cases(book);
 
-        -- Manuscript witnesses for variants
-        CREATE TABLE IF NOT EXISTS manuscript_witnesses (
+        CREATE TABLE IF NOT EXISTS textual_variant_readings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            variant_id INTEGER NOT NULL REFERENCES textual_variants(id),
-            manuscript TEXT NOT NULL,
-            manuscript_date TEXT,
-            reading_support TEXT
+            case_id INTEGER NOT NULL REFERENCES textual_variant_cases(id) ON DELETE CASCADE,
+            reading_key TEXT NOT NULL,
+            tradition TEXT NOT NULL,
+            text TEXT NOT NULL,
+            original_text TEXT,
+            language TEXT,
+            UNIQUE(case_id, reading_key)
+        );
+
+        CREATE TABLE IF NOT EXISTS textual_variant_witnesses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reading_id INTEGER NOT NULL REFERENCES textual_variant_readings(id) ON DELETE CASCADE,
+            witness TEXT NOT NULL,
+            approximate_date TEXT,
+            source_citation TEXT,
+            source_url TEXT,
+            UNIQUE(reading_id, witness)
+        );
+
+        CREATE TABLE IF NOT EXISTS textual_critical_judgments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER NOT NULL REFERENCES textual_variant_cases(id) ON DELETE CASCADE,
+            judgment TEXT NOT NULL,
+            attribution TEXT,
+            source_citation TEXT,
+            source_url TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS textual_theological_interpretations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER NOT NULL REFERENCES textual_variant_cases(id) ON DELETE CASCADE,
+            interpretation TEXT NOT NULL,
+            attribution TEXT,
+            source_citation TEXT,
+            source_url TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS textual_author_claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER NOT NULL REFERENCES textual_variant_cases(id) ON DELETE CASCADE,
+            author TEXT NOT NULL,
+            claim TEXT NOT NULL,
+            source_citation TEXT,
+            source_url TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS textual_translation_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id INTEGER NOT NULL REFERENCES textual_variant_cases(id) ON DELETE CASCADE,
+            translation TEXT NOT NULL,
+            preferred_reading TEXT NOT NULL,
+            rationale TEXT
         );
 
         -- NT→OT quotations where the NT follows the LXX form rather than MT.
-        -- Used by lookup_verse to emit a one-line hint surfacing the divergence,
-        -- and joinable to textual_variants for the full reading comparison.
         CREATE TABLE IF NOT EXISTS nt_ot_lxx_quote_hints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nt_reference TEXT NOT NULL,
@@ -2446,7 +2519,7 @@ def create_schema(conn: sqlite3.Connection):
             follows_lxx INTEGER NOT NULL DEFAULT 1,
             divergence_type TEXT,
             divergence_note TEXT,
-            textual_variant_id INTEGER REFERENCES textual_variants(id),
+            variant_case_id INTEGER REFERENCES textual_variant_cases(id),
             UNIQUE(nt_reference, ot_reference)
         );
         CREATE INDEX IF NOT EXISTS idx_ntoq_nt ON nt_ot_lxx_quote_hints(nt_reference);

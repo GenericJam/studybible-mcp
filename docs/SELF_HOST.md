@@ -40,8 +40,19 @@ This guide covers running your own instance of the Study Bible MCP server.
 5. **Build the database**
    ```bash
    python scripts/build_database.py
+   python scripts/import_heiser_content.py
    ```
-   This creates the base `db/study_bible.db`. Its final size depends on the optional graph, commentary, and embedding datasets; the deployed database is currently over 600MB.
+   This creates the base `db/study_bible.db` and imports the bundled attributed
+   theology and manuscript-variant records. Its final size depends on the
+   optional graph, commentary, and embedding datasets; the deployed database is
+   currently over 600MB.
+
+   To upgrade a database that still has the old mixed `textual_variants` table,
+   migrate it once before rerunning the importer:
+   ```bash
+   python scripts/migrate_textual_variants.py --database db/study_bible.db
+   python scripts/import_heiser_content.py
+   ```
 
 6. **Run the server**
 

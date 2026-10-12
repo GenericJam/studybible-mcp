@@ -982,29 +982,25 @@ Only Torah books (Genesis through Deuteronomy) have weave data. Source: Moshe Kl
     Tool(
         name="get_textual_variant",
         annotations=ToolAnnotations(title="Textual Variant (MT vs LXX/DSS)", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
-        description="""Retrieve the textual variant record for a verse where the Masoretic Hebrew, the Septuagint, and/or the Dead Sea Scrolls diverge.
+        description="""Retrieve a textual-variant record without conflating evidence and interpretation.
 
 WHAT IT RETURNS for a given verse reference:
-- The Masoretic Hebrew (MT) reading + original Hebrew
-- The variant reading (typically the LXX form quoted in the NT, or a DSS reading that differs from MT)
-- The variant's original-language form (Greek or Hebrew)
-- Manuscript witnesses for each reading (LXX, DSS scrolls — e.g. 1QIsa^a, 4QDeut^q, Mur88 — Masoretic Text, NT quotation citation)
-- Scholarly consensus on which reading is older / how the divergence arose
-- The HLT preferred reading (which form the Heiser Literal Translation follows) + the rationale
+- Manuscript evidence: distinct readings and the witnesses attached to each reading
+- Critical judgments: editorial or scholarly conclusions, with attribution and citation when available
+- Theological interpretations: explicitly labelled interpretations, never presented as manuscript evidence
+- Author-specific claims: named-author arguments, separate from critical judgments
+- Translation decisions: a translation's selected reading and rationale
+- NT quotation alignment: separately catalogued links where an NT quotation follows an LXX form
 
-The HLT's principle: when the NT directly quotes the LXX form of an OT verse, the LXX form is the authoritative reading for Christian Scripture — apostolic endorsement overrides text-critical priority. So for verses like Psalm 40:6 / Hebrews 10:5, Isaiah 61:1 / Luke 4:18, Amos 9:12 / Acts 15:17, the HLT follows the LXX form in the body and footnotes the MT.
+The sections remain separate even when one has no catalogued data. A witness
+date describes the witness record; it does not by itself date the underlying
+reading. Unsourced editorial summaries are labelled as such.
 
 Relevant where a New Testament quotation does not match the modern English Old
 Testament, and to questions about how the Hebrew, Greek, and Qumran textual
 traditions differ at a specific verse.
 
-Covered verses include Hebrews 10:5-7, Hebrews 1:6, Matthew 12:20-21, Acts 15:17,
-Luke 4:18-19, Luke 3:6, Matthew 21:16, Romans 9:27-29, Romans 10:20, Romans 15:12,
-Romans 2:24, Acts 7:43, Acts 8:32-33, Acts 13:41, 1 Peter 4:18, Ephesians 4:26,
-Luke 3:36, and the Old Testament verses they quote. Either side of a pair
-returns the same variant row.
-
-`lookup_verse` reports when a verse has a quotation hint or variant row.""",
+`lookup_verse` reports when a verse has a quotation hint or variant case.""",
         inputSchema={
             "type": "object",
             "properties": {
@@ -1386,6 +1382,119 @@ def format_ancient_source_results(
             for link in row["biblical_links"]:
                 lines.append(f"- {_format_ancient_biblical_link(link)}")
         lines.extend(["", "---", ""])
+    return "\n".join(lines).rstrip()
+
+
+def _format_sourced_statement(item: dict, field: str, label: str) -> list[str]:
+    """Format an attributed judgment or interpretation without implying provenance."""
+    attribution = item.get("attribution") or "Unattributed"
+    lines = [f"- **{label}: {attribution}.** {item[field]}"]
+    if item.get("source_citation"):
+        lines.append(f"  - Citation: {item['source_citation']}")
+    if item.get("source_url"):
+        lines.append(f"  - Source: {item['source_url']}")
+    return lines
+
+
+def format_textual_variant_cases(
+    reference: str,
+    cases: list[dict],
+    quotation_hints: list[dict],
+) -> str:
+    """Format evidence, judgments, interpretations, and claims as separate sections."""
+    lines = [f"# Textual variant record for {reference}", ""]
+    for case in cases:
+        lines.extend(
+            [
+                f"## Variant at {case['reference']}",
+                f"**Case key:** {case['case_key']}",
+            ]
+        )
+        if case.get("significance"):
+            lines.append(f"**Significance classification:** {case['significance']}")
+
+        lines.extend(["", "### Manuscript evidence"])
+        readings = case.get("manuscript_evidence") or []
+        if not readings:
+            lines.append("*No manuscript readings catalogued.*")
+        for reading in readings:
+            lines.extend(["", f"#### {reading['tradition']}", reading["text"]])
+            if reading.get("original_text"):
+                lines.append(f"\n**Original-language text:** `{reading['original_text']}`")
+            witnesses = reading.get("witnesses") or []
+            if witnesses:
+                lines.append("\n**Witnesses supporting this reading:**")
+                for witness in witnesses:
+                    date = (
+                        f" ({witness['approximate_date']})"
+                        if witness.get("approximate_date")
+                        else ""
+                    )
+                    lines.append(f"- **{witness['witness']}**{date}")
+                    if witness.get("source_citation"):
+                        lines.append(f"  - Citation: {witness['source_citation']}")
+                    if witness.get("source_url"):
+                        lines.append(f"  - Source: {witness['source_url']}")
+
+        lines.extend(["", "### Critical judgments"])
+        judgments = case.get("critical_judgments") or []
+        if judgments:
+            for judgment in judgments:
+                lines.extend(
+                    _format_sourced_statement(judgment, "judgment", "Attribution")
+                )
+        else:
+            lines.append("*No critical judgment catalogued.*")
+
+        lines.extend(["", "### Theological interpretations"])
+        interpretations = case.get("theological_interpretations") or []
+        if interpretations:
+            for interpretation in interpretations:
+                lines.extend(
+                    _format_sourced_statement(
+                        interpretation,
+                        "interpretation",
+                        "Attribution",
+                    )
+                )
+        else:
+            lines.append("*No theological interpretation catalogued.*")
+
+        lines.extend(["", "### Author-specific claims"])
+        claims = case.get("author_specific_claims") or []
+        if claims:
+            for claim in claims:
+                lines.append(f"- **{claim['author']}.** {claim['claim']}")
+                if claim.get("source_citation"):
+                    lines.append(f"  - Citation: {claim['source_citation']}")
+                if claim.get("source_url"):
+                    lines.append(f"  - Source: {claim['source_url']}")
+        else:
+            lines.append("*No author-specific claim catalogued.*")
+
+        lines.extend(["", "### Translation decisions"])
+        decisions = case.get("translation_decisions") or []
+        if decisions:
+            for decision in decisions:
+                lines.append(
+                    f"- **{decision['translation']}:** "
+                    f"{decision['preferred_reading']}"
+                )
+                if decision.get("rationale"):
+                    lines.append(f"  - Rationale: {decision['rationale']}")
+        else:
+            lines.append("*No translation decision catalogued.*")
+        lines.extend(["", "---", ""])
+
+    if quotation_hints:
+        lines.extend(["## NT quotation alignment", ""])
+        for hint in quotation_hints:
+            lines.append(
+                f"- **{hint['nt_display']}** quotes **{hint['ot_display']}** — "
+                f"*{hint.get('divergence_type') or 'alignment'}*: "
+                f"{hint.get('divergence_note') or 'No note catalogued.'}"
+            )
+
     return "\n".join(lines).rstrip()
 
 

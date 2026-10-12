@@ -102,55 +102,159 @@ def import_content_file(conn: sqlite3.Connection, filepath: Path) -> tuple[int, 
     return entries, urls_updated, refs, themes
 
 
+NON_VARIANT_CATEGORIES = frozenset({"MT_preserved", "translation_choice"})
+
+
+def import_textual_variant_record(
+    conn: sqlite3.Connection,
+    variant: dict,
+) -> int | None:
+    """Replace one genuine manuscript-variant case and return its case ID.
+
+    The legacy dataset also contains interpretation-only records labelled
+    ``MT_preserved`` or ``translation_choice``. Those are not manuscript
+    variants and are deliberately excluded from this tool's data model.
+    """
+    case_key = variant["variant_source"]
+    if case_key in NON_VARIANT_CATEGORIES:
+        return None
+
+    reference = variant["reference"]
+    parts = reference.split(".")
+    book = parts[0] if parts else ""
+    chapter = int(parts[1]) if len(parts) > 1 else None
+    verse = int(parts[2]) if len(parts) > 2 else None
+
+    conn.execute(
+        """INSERT INTO textual_variant_cases
+           (reference, book, chapter, verse, case_key, significance)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(reference, case_key) DO UPDATE SET
+               book = excluded.book,
+               chapter = excluded.chapter,
+               verse = excluded.verse,
+               significance = excluded.significance""",
+        (
+            reference,
+            book,
+            chapter,
+            verse,
+            case_key,
+            variant.get("variant_significance"),
+        ),
+    )
+    case_id = conn.execute(
+        """SELECT id FROM textual_variant_cases
+           WHERE reference = ? AND case_key = ?""",
+        (reference, case_key),
+    ).fetchone()[0]
+
+    conn.execute(
+        """DELETE FROM textual_variant_witnesses
+           WHERE reading_id IN (
+               SELECT id FROM textual_variant_readings WHERE case_id = ?
+           )""",
+        (case_id,),
+    )
+    for table in (
+        "textual_variant_readings",
+        "textual_critical_judgments",
+        "textual_theological_interpretations",
+        "textual_author_claims",
+        "textual_translation_decisions",
+    ):
+        conn.execute(f"DELETE FROM {table} WHERE case_id = ?", (case_id,))
+
+    reading_ids: dict[str, int] = {}
+    readings = (
+        (
+            "mt",
+            "Masoretic Text",
+            variant["mt_reading"],
+            variant.get("mt_hebrew"),
+        ),
+        (
+            "variant",
+            case_key,
+            variant["variant_reading"],
+            variant.get("variant_original"),
+        ),
+    )
+    for reading_key, tradition, reading_text, original_text in readings:
+        cursor = conn.execute(
+            """INSERT INTO textual_variant_readings
+               (case_id, reading_key, tradition, text, original_text)
+               VALUES (?, ?, ?, ?, ?)""",
+            (case_id, reading_key, tradition, reading_text, original_text),
+        )
+        reading_ids[reading_key] = cursor.lastrowid
+
+    for witness in variant.get("witnesses", []):
+        reading_key = (
+            "mt" if witness.get("reading_support") == "supports_mt" else "variant"
+        )
+        conn.execute(
+            """INSERT INTO textual_variant_witnesses
+               (reading_id, witness, approximate_date)
+               VALUES (?, ?, ?)""",
+            (
+                reading_ids[reading_key],
+                witness["manuscript"],
+                witness.get("manuscript_date"),
+            ),
+        )
+
+    if variant.get("scholarly_consensus"):
+        conn.execute(
+            """INSERT INTO textual_critical_judgments
+               (case_id, judgment, attribution)
+               VALUES (?, ?, ?)""",
+            (
+                case_id,
+                variant["scholarly_consensus"],
+                "Dataset editorial summary",
+            ),
+        )
+
+    if variant.get("heiser_analysis"):
+        conn.execute(
+            """INSERT INTO textual_author_claims
+               (case_id, author, claim)
+               VALUES (?, ?, ?)""",
+            (case_id, "Michael S. Heiser", variant["heiser_analysis"]),
+        )
+
+    if variant.get("preferred_for_hlt"):
+        conn.execute(
+            """INSERT INTO textual_translation_decisions
+               (case_id, translation, preferred_reading, rationale)
+               VALUES (?, ?, ?, ?)""",
+            (
+                case_id,
+                "Heiser Literal Translation (HLT)",
+                variant["preferred_for_hlt"],
+                variant.get("hlt_rationale"),
+            ),
+        )
+
+    return case_id
+
+
 def import_textual_variants(conn: sqlite3.Connection, variants_dir: Path) -> int:
-    """Import textual variants from JSON files in the variants directory."""
+    """Import genuine manuscript variants from the legacy JSON dataset."""
     count = 0
     for filepath in sorted(variants_dir.glob("*.json")):
-        with open(filepath) as f:
-            data = json.load(f)
-
+        with open(filepath, encoding="utf-8") as file:
+            data = json.load(file)
         for variant in data.get("variants", []):
-            ref = variant["reference"]
-            parts = ref.split(".")
-            book = parts[0] if parts else ""
-            chapter = int(parts[1]) if len(parts) > 1 else None
-            verse = int(parts[2]) if len(parts) > 2 else None
-
             try:
-                cursor = conn.execute(
-                    """INSERT OR IGNORE INTO textual_variants
-                       (reference, book, chapter, verse, mt_reading, mt_hebrew,
-                        variant_source, variant_reading, variant_original,
-                        variant_significance, heiser_analysis, scholarly_consensus,
-                        preferred_for_hlt, hlt_rationale)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        ref, book, chapter, verse,
-                        variant["mt_reading"], variant.get("mt_hebrew"),
-                        variant["variant_source"], variant["variant_reading"],
-                        variant.get("variant_original"),
-                        variant.get("variant_significance", "major_theological"),
-                        variant.get("heiser_analysis"),
-                        variant.get("scholarly_consensus"),
-                        variant.get("preferred_for_hlt"),
-                        variant.get("hlt_rationale"),
-                    ),
-                )
-                if cursor.rowcount > 0:
+                if import_textual_variant_record(conn, variant) is not None:
                     count += 1
-
-                    # Import manuscript witnesses
-                    variant_id = cursor.lastrowid
-                    for witness in variant.get("witnesses", []):
-                        conn.execute(
-                            """INSERT OR IGNORE INTO manuscript_witnesses
-                               (variant_id, manuscript, manuscript_date, reading_support)
-                               VALUES (?, ?, ?, ?)""",
-                            (variant_id, witness["manuscript"],
-                             witness.get("manuscript_date"), witness.get("reading_support")),
-                        )
-            except sqlite3.Error as e:
-                print(f"  Warning: Failed to insert variant for {ref}: {e}")
+            except (KeyError, TypeError, ValueError, sqlite3.Error) as error:
+                print(
+                    f"  Warning: Failed to insert variant for "
+                    f"{variant.get('reference', '?')}: {error}"
+                )
 
     conn.commit()
     return count
@@ -203,18 +307,30 @@ def main():
     print(f"\n[Content Totals] {total_entries} entries, {total_urls} urls updated, "
           f"{total_refs} verse refs, {total_themes} theme links")
 
-    # 3. Import textual variants
+    # 3. Import manuscript variants. Interpretation-only legacy records are
+    # intentionally excluded from the textual-variant tool.
     variants_dir = data_dir / "variants"
     if variants_dir.exists() and list(variants_dir.glob("*.json")):
         count = import_textual_variants(conn, variants_dir)
-        print(f"\n[Variants] Imported {count} textual variants")
+        print(f"\n[Variants] Imported {count} manuscript variants")
     else:
         print(f"\n[Variants] No variant files found in {variants_dir}")
 
     # Summary
     print("\n" + "=" * 60)
-    for table in ["theology_themes", "theology_content", "theology_verse_index", "theology_theme_index",
-                   "textual_variants", "manuscript_witnesses"]:
+    for table in [
+        "theology_themes",
+        "theology_content",
+        "theology_verse_index",
+        "theology_theme_index",
+        "textual_variant_cases",
+        "textual_variant_readings",
+        "textual_variant_witnesses",
+        "textual_critical_judgments",
+        "textual_theological_interpretations",
+        "textual_author_claims",
+        "textual_translation_decisions",
+    ]:
         row = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
         print(f"  {table}: {row[0]} rows")
     print("=" * 60)

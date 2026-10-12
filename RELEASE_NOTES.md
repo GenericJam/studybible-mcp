@@ -2,6 +2,23 @@
 
 ---
 
+## Textual evidence and interpretation separation
+
+- Replaced the mixed textual-variant record with independent tables and output
+  sections for manuscript readings and witnesses, critical judgments,
+  theological interpretations, named-author claims, and translation decisions.
+- Labelled unsourced critical summaries as dataset editorial summaries instead
+  of presenting them as manuscript evidence or scholarly consensus.
+- Kept NT quotation alignment separate from both textual evidence and the HLT's
+  translation decisions.
+- Excluded legacy `MT_preserved` and `translation_choice` records from
+  `get_textual_variant`; they describe interpretation, not manuscript
+  divergence.
+- Added a one-time migration that preserves genuine variant cases, witnesses,
+  and NT quotation links while removing the obsolete mixed tables.
+
+---
+
 ## Josephus primary-source search
 
 - Added `search_ancient_sources` with full-text, corpus, biblical-reference,

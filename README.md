@@ -551,7 +551,11 @@ Find structurally paired Torah passages under Moshe Kline's Woven Torah hypothes
 
 #### `get_textual_variant`
 
-Inspect catalogued MT/LXX/DSS readings, manuscript witnesses, and NT quotations of LXX forms.
+Inspect catalogued MT/LXX/DSS divergences without collapsing sources and
+conclusions. The response keeps manuscript readings and their witnesses,
+critical judgments, theological interpretations, named-author claims,
+translation decisions, and NT quotation alignment in separate sections.
+Unsourced judgments are explicitly labelled as dataset editorial summaries.
 
 ---
 

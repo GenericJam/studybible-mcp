@@ -195,8 +195,9 @@ flowchart TD
     %% === TEXTUAL CRITICISM PATH ===
     Classify -->|"MT/LXX/DSS divergence"| TextualVariant
     TextualVariant["`**get_textual_variant**
-    Returns: variant readings,
-    witnesses, and NT quotation links`"]
+    Returns separate manuscript evidence,
+    critical judgments, theology,
+    author claims, and quotation alignment`"]
     TextualVariant --> Respond
 
     Classify -->|"Compare MT and LXX editions"| VersionComparison
@@ -319,7 +320,8 @@ User question → `search_ancient_sources` → `lookup_verse` (for an explicitly
 User question → `compare_biblical_versions` → `word_study` (when morphology needs explanation) → response
 
 **Textual-variant analysis:**
-User question → `get_textual_variant` → `compare_biblical_versions` → response
+User question → `get_textual_variant` (evidence and attributed interpretation
+remain separate) → `compare_biblical_versions` (edition text and provenance) → response
 
 **Torah structural study:**
 User question → `get_torah_weave` → `lookup_verse` → response
