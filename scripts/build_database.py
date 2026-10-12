@@ -183,16 +183,23 @@ def build_database(data_dir: Path, db_path: Path, rebuild: bool = False):
         if ane_dir.exists():
             import_ane_context(conn, ane_dir)
 
-        # Import provenance-aware MT/LXX edition texts when downloaded.
+        # Import Septuagint edition texts when downloaded (MT is served from
+        # `verses`). A partial download aborts the build instead of importing
+        # an incomplete corpus.
         lxx_dir = data_dir / "lxx"
-        if (
-            (lxx_dir / "verse_pairs.jsonl").exists()
-            and (lxx_dir / "morphology").exists()
-            and (lxx_dir / "brenton").exists()
-        ):
-            mt_count, lxx_count = import_biblical_versions(conn, data_dir)
+        if lxx_dir.exists():
+            try:
+                mt_count, lxx_count = import_biblical_versions(conn, data_dir)
+            except FileNotFoundError as error:
+                raise click.ClickException(str(error)) from error
             console.print(
-                f"  [green]✓[/green] Imported {mt_count} MT and {lxx_count} LXX edition rows"
+                f"  [green]✓[/green] Imported {lxx_count} LXX edition rows "
+                f"({mt_count} MT verses available from TAHOT)"
+            )
+        else:
+            console.print(
+                f"  [yellow]Skipping MT/LXX comparison: {lxx_dir} not found "
+                "(run scripts/download_biblical_versions.py)[/yellow]"
             )
 
         # Optimize

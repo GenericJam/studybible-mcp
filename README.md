@@ -164,22 +164,43 @@ Returns:
 #### `compare_biblical_versions`
 
 Compare the Masoretic Text and Septuagint with explicit per-verse provenance.
-The result keeps canonical and edition references separate, including the
-Hebrew/Greek Psalm numbering difference and other mapped versification shifts.
+Covers Old Testament and Septuagint books only. Rows that share a canonical
+(MT/English) reference appear under one header, while each row keeps its own
+edition reference, so Hebrew/Greek Psalm numbering and other mapped
+versification shifts stay visible. Psalm 82:6, for example, shows MT `Psa.82.6`
+and LXX `Psa.81.6`; Psalm 40:6 shows MT `Psa.40.7` (Hebrew numbering) and LXX
+`Psa.39.7`.
 
 ```text
 compare_biblical_versions(
-  reference="Psalm 24:1",
+  reference="Psalm 24:1",        # also "Psalm 82:1-8", "Psalm 81:6-82:1", "Psalm 82"
   versions=["MT", "LXX"],
+  numbering="canonical",          # or "lxx" to read the reference in Greek numbering
   include_original=true,
   include_morphology=false
 )
 ```
 
 Every edition row includes its version, edition, language, canonical reference,
-edition reference, original text, English translation, license, and source URL.
-LXX text covers all 59 books in the source edition; books and additions without
-an MT counterpart return LXX-only rows.
+edition reference, original text, English, license, and source URL, plus the
+versification mapping whenever it is not `identity`.
+
+- **MT** comes from the STEPBible TAHOT verses already in the database (Westminster
+  Leningrad Codex). Its English is STEPBible word glosses (interlinear, not a
+  translation).
+- **LXX** covers all 59 books of the Rahlfs source edition. Brenton's English is
+  shown only for the recension Brenton translated (Theodotion for Daniel, Susanna
+  and Bel; Vaticanus B for Joshua and Judges); Old Greek and Alexandrinus rows say
+  the translation is not available for that edition.
+- **LXX-only verses** (pluses such as the Prayer of Azariah, Psalm 151, and the
+  Septuagint-only books) have no canonical MT position, so they never appear as
+  the counterpart of a different MT verse. Request them with `numbering="lxx"`; a
+  canonical lookup notes when such verses sit at the same Greek-numbered
+  position. Septuagint-only books (Tobit, Sirach, ...) always use Greek numbering.
+
+New Testament references, unparseable references, and references with no
+matching verses each return a specific message. A database without the
+Septuagint table tells you to run `python scripts/upgrade_database.py`.
 
 #### 2. `word_study`
 
@@ -850,11 +871,18 @@ Rahlfs morphology dataset, pinned to commit
 `verse_pairs.jsonl` mapping resolves Psalm numbering, Jeremiah's chapter order,
 2 Esdras, and smaller MT/LXX shifts. Downloads are checked against the pinned
 Git blob hashes. Morphology is CC BY 4.0; the underlying Rahlfs (1935) Greek
-text is public domain.
+text is public domain. Only the LXX rows are stored (about 35 MB including
+indexes, with word morphology zlib-compressed); MT rows are read from the
+existing TAHOT `verses` table at query time.
 
 English LXX translations come from the public-domain
 [Brenton Septuagint at eBible.org](https://ebible.org/details.php?id=eng-Brenton).
-The archive is SHA-256 verified before import.
+eBible regenerates its unversioned zip, so the download script verifies the
+SHA-256 of every extracted USFM book rather than of the archive, and never
+deletes or overwrites local files that fail verification. `build_database.py`
+stops with an error if `data/lxx` is present but incomplete (any of the 59
+morphology books, the mapping, a required Brenton book, or a manifest-listed
+file is missing or truncated).
 
 ### BDB Hebrew Lexicon
 

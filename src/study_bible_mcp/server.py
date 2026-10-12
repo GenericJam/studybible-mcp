@@ -259,19 +259,63 @@ async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextCon
     unsupported = [version for version in versions if version not in {"MT", "LXX"}]
     if unsupported:
         return text(f"Unsupported biblical version(s): {', '.join(unsupported)}. Use MT and/or LXX.")
+    numbering = str(args.get("numbering", "canonical")).lower()
+    if numbering not in {"canonical", "lxx"}:
+        return text(f"Unsupported numbering '{numbering}'. Use 'canonical' (MT/English) or 'lxx' (Greek edition).")
 
-    rows = await db.compare_biblical_versions(reference, versions)
-    if not rows:
+    result = await db.compare_biblical_versions(reference, versions, numbering)
+    status = result["status"]
+    if status == "invalid_reference":
         return text(
-            f"No biblical edition data found for {reference}. "
-            "Run scripts/download_biblical_versions.py and rebuild the database."
+            f"Could not parse '{reference}'. Use 'Book chapter:verse' (e.g. 'Psalm 82:6'), "
+            "a range within or across chapters ('Psalm 82:1-8', 'Psalm 81:6-82:1'), "
+            "or a whole chapter ('Psalm 82')."
         )
+    if status == "new_testament":
+        return text(
+            f"{reference} is a New Testament reference. compare_biblical_versions covers "
+            "Old Testament and Septuagint books only; use lookup_verse for New Testament text."
+        )
+    if status == "unsupported_book":
+        return text(
+            f"'{result['book']}' is not a book covered by compare_biblical_versions. Supported: "
+            "the Old Testament books (MT and LXX) and the Septuagint-only books Tobit, Judith, "
+            "Wisdom, Sirach, Baruch, Letter of Jeremiah, 1-4 Maccabees, 1-2 Esdras, Greek Esther, "
+            "Susanna, Bel and the Dragon, Odes, and Psalms of Solomon."
+        )
+    if status == "missing_data":
+        return text(
+            "Septuagint comparison data is not in this database (table "
+            "biblical_version_verses is missing or empty). Run "
+            "`python scripts/upgrade_database.py` to add it."
+        )
+    lxx_only_note = ""
+    if result["lxx_only"]:
+        listed = ", ".join(
+            f"{row['edition_reference']} ({row['edition']})" for row in result["lxx_only"]
+        )
+        lxx_only_note = (
+            "LXX-only verses with no MT counterpart occupy this position in Greek edition "
+            f"numbering: {listed}. Request numbering='lxx' to view them."
+        )
+    if status == "no_match":
+        if result["lxx_only_book"] and "LXX" not in versions:
+            return text(
+                f"{reference} is in a Septuagint-only book with no Masoretic Text; "
+                "include 'LXX' in versions."
+            )
+        scheme = "Greek edition" if result["numbering"] == "lxx" else "canonical MT/English"
+        message = f"No {' or '.join(versions)} text found for {reference} ({scheme} numbering)."
+        return text(f"{message}\n\n{lxx_only_note}" if lxx_only_note else message)
+
     return text(
         format_biblical_version_comparison(
             reference,
-            rows,
+            result["rows"],
             include_original=args.get("include_original", True),
             include_morphology=args.get("include_morphology", False),
+            numbering=result["numbering"],
+            note=lxx_only_note,
         )
     )
 

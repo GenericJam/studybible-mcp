@@ -5,15 +5,27 @@
 ## Provenance-aware Septuagint comparison
 
 - Added `compare_biblical_versions` with MT/LXX selection and independent
-  original-text and morphology controls.
+  original-text and morphology controls. References can be single verses,
+  ranges within or across chapters (`Psalm 81:6-82:1`), or whole chapters
+  (`Psalm 82`); `numbering="lxx"` reads them in Greek edition numbering.
 - Added all 59 books of the pinned Rahlfs morphology corpus plus the
-  public-domain Brenton translation.
-- Preserved version, edition, language, canonical reference, edition reference,
-  text, translation, license, and source URL on every imported row.
+  public-domain Brenton translation, attached only to the recension Brenton
+  translated (Theodotion Daniel/Susanna/Bel, Vaticanus B Joshua/Judges).
+- MT rows are built at query time from the existing TAHOT verses (English
+  canonical numbering, Hebrew numbering as the edition reference) instead of
+  being copied, so the comparison adds about 35 MB to the database rather than
+  about 200 MB.
+- Every returned row carries version, edition, language, canonical reference,
+  edition reference, text, English, license, and source URL; MT English is
+  labelled as STEPBible word glosses, not a translation.
 - Added explicit MT/LXX verse mapping, including Hebrew/Greek Psalm numbering,
-  rather than calculating offsets.
-- Added checksum-verified source downloads and regression coverage for Psalm
-  numbering and provenance.
+  rather than calculating offsets. LXX-only verses have no canonical position
+  and are never shown as the counterpart of a different MT verse.
+- Added per-book SHA-256 verification of the Brenton USFM, Git-blob
+  verification of the LXX sources, and a build-time check that fails on
+  partial downloads.
+- Distinct messages for New Testament references, unparseable references, no
+  matching verses, and a missing comparison table.
 
 ---
 

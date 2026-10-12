@@ -134,26 +134,49 @@ form, is needed.""",
         ),
         description="""Compare provenance-complete verse text across biblical editions.
 
-Defaults to the Masoretic Text (MT) and Septuagint (LXX). Each result preserves
-both the canonical MT/KJV reference and the source edition's own reference, so
-Psalm numbering and other Hebrew/Greek versification differences remain
-explicit rather than being guessed from a fixed offset.
+Defaults to the Masoretic Text (MT) and Septuagint (LXX). Covers Old Testament
+and Septuagint books only (not the New Testament). Rows that share a canonical
+MT/English reference are grouped under one header, and each row also keeps the
+source edition's own reference (e.g. Psalm 82:6 = Hebrew Psa.82.6 = Greek
+Psa.81.6), so Psalm numbering and other Hebrew/Greek versification differences
+stay explicit rather than being guessed from a fixed offset.
+
+MT text is the Westminster Leningrad Codex from STEPBible TAHOT; its English is
+STEPBible word glosses (interlinear, not a translation). LXX text is Rahlfs
+(1935) with Brenton's English where Brenton translates the same recension
+(Theodotion for Daniel, Susanna and Bel; Vaticanus B for Joshua and Judges).
+LXX-only verses with no MT counterpart (e.g. the Prayer of Azariah) have no
+canonical position: request them with numbering='lxx'.
 
 Returns the version, edition, language, canonical reference, edition reference,
-original text, English translation, license, and source URL for every row.
-Original-language text and word-level morphology can be omitted independently.""",
+original text, English, license, source URL, and any non-identity versification
+mapping for every row. Original-language text and word-level morphology can be
+omitted independently.""",
         inputSchema={
             "type": "object",
             "properties": {
                 "reference": {
                     "type": "string",
-                    "description": "Canonical reference or same-chapter range (e.g. 'Psalm 24:1' or 'Genesis 1:1-3')",
+                    "description": (
+                        "Verse, range (also across chapters), or whole chapter, e.g. "
+                        "'Psalm 24:1', 'Genesis 1:1-3', 'Psalm 81:6-82:1', 'Psalm 82'"
+                    ),
                 },
                 "versions": {
                     "type": "array",
                     "items": {"type": "string", "enum": ["MT", "LXX"]},
                     "default": ["MT", "LXX"],
                     "description": "Editions to return, in display order. Default: MT and LXX",
+                },
+                "numbering": {
+                    "type": "string",
+                    "enum": ["canonical", "lxx"],
+                    "default": "canonical",
+                    "description": (
+                        "Read the reference in canonical MT/English numbering (default) or in "
+                        "the Greek edition's numbering ('lxx', e.g. Psalm 81:6 = MT Psalm 82:6). "
+                        "Books without an MT always use Greek numbering."
+                    ),
                 },
                 "include_original": {
                     "type": "boolean",
@@ -1153,33 +1176,48 @@ def format_biblical_version_comparison(
     rows: list[dict],
     include_original: bool = True,
     include_morphology: bool = False,
+    numbering: str = "canonical",
+    note: str = "",
 ) -> str:
-    """Format edition rows while keeping every provenance field visible."""
-    lines = [f"## Biblical Version Comparison: {reference}", ""]
-    current_reference: str | None = None
+    """Format edition rows while keeping every provenance field visible.
+
+    Rows sharing a canonical (MT/English) reference are grouped under one
+    header; LXX-only rows (no canonical reference) are grouped by their
+    edition reference.
+    """
+    title = f"## Biblical Version Comparison: {reference}"
+    if numbering == "lxx":
+        title += " (Septuagint edition numbering)"
+    lines = [title, ""]
+    if note:
+        lines.extend([f"*{note}*", ""])
+    current_group: str | None = None
     for row in rows:
-        if row["canonical_reference"] != current_reference:
-            current_reference = row["canonical_reference"]
-            lines.extend([f"### {current_reference}", ""])
+        canonical = row.get("canonical_reference")
+        group = canonical or f"{row['edition_reference']} (LXX-only, no MT counterpart)"
+        if group != current_group:
+            current_group = group
+            lines.extend([f"### {group}", ""])
 
         lines.append(f"#### {row['version']} — {row['edition']}")
         lines.append(f"- **Version:** {row['version']}")
         lines.append(f"- **Edition:** {row['edition']}")
         lines.append(f"- **Language:** {row['language']}")
-        lines.append(f"- **Canonical reference:** {row['canonical_reference']}")
+        lines.append(f"- **Canonical reference:** {canonical or 'none (no MT counterpart)'}")
         lines.append(f"- **Edition reference:** {row['edition_reference']}")
         lines.append(f"- **License:** {row['license']}")
         lines.append(f"- **Source:** {row['source_url']}")
-        if row.get("mapping_method") and row["canonical_reference"] != row["edition_reference"]:
+        if row.get("mapping_method") and row["mapping_method"] != "identity":
             lines.append(f"- **Versification mapping:** {row['mapping_method']}")
         lines.append("")
 
         if include_original:
             lines.extend([f"**{row['language']} text:** {row['text']}", ""])
+        label = row.get("translation_label") or "English translation"
         if row.get("translation"):
-            lines.extend([f"**English translation:** {row['translation']}", ""])
+            lines.extend([f"**English ({label}):** {row['translation']}", ""])
         else:
-            lines.extend(["**English translation:** Not available for this edition row.", ""])
+            lines.extend([f"**English ({label}):** Not available for this edition.", ""])
 
         if include_morphology:
             words = _parse_json_field(row.get("morphology"), [])
