@@ -246,6 +246,40 @@ async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
     return text(result)
 
 
+# compare_biblical_versions returns at most this many verses per call.
+MAX_COMPARISON_VERSES = 10
+_REFERENCE_BOOK = re.compile(r"^\s*(.*?\D)\s*\d+(?:\s*:\s*\d+)?(?:\s*[-–—]\s*\d+(?:\s*:\s*\d+)?)?\s*$")
+
+
+def _cap_comparison_rows(
+    reference: str, rows: list[dict], numbering: str
+) -> tuple[list[dict], str]:
+    """Keep the first MAX_COMPARISON_VERSES verse groups; say where to resume."""
+    def group(row: dict) -> str:
+        return row.get("canonical_reference") or f"LXX-only {row['edition_reference']}"
+
+    groups = list(dict.fromkeys(group(row) for row in rows))
+    if len(groups) <= MAX_COMPARISON_VERSES:
+        return rows, ""
+    kept = set(groups[:MAX_COMPARISON_VERSES])
+    resume_rows = [row for row in rows if group(row) == groups[MAX_COMPARISON_VERSES]]
+    # Greek numbering resumes from the LXX row's own edition reference.
+    resume_row = next((row for row in resume_rows if row["version"] == "LXX"), resume_rows[0])
+    book = _REFERENCE_BOOK.match(reference)
+    if numbering == "canonical" and book and resume_row.get("canonical_chapter"):
+        resume = (
+            f"'{book.group(1).strip()} {resume_row['canonical_chapter']}:"
+            f"{resume_row['canonical_verse']}'"
+        )
+    else:
+        resume = f"{resume_row['edition_reference']} (numbering='lxx')"
+    note = (
+        f"Showing the first {MAX_COMPARISON_VERSES} of {len(groups)} verses. "
+        f"Continue from {resume} in another call."
+    )
+    return [row for row in rows if group(row) in kept], note
+
+
 async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextContent]:
     """Compare MT/LXX rows with explicit per-verse provenance."""
     reference = args.get("reference", "").strip()
@@ -308,14 +342,15 @@ async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextCon
         message = f"No {' or '.join(versions)} text found for {reference} ({scheme} numbering)."
         return text(f"{message}\n\n{lxx_only_note}" if lxx_only_note else message)
 
+    rows, cap_note = _cap_comparison_rows(reference, result["rows"], result["numbering"])
     return text(
         format_biblical_version_comparison(
             reference,
-            result["rows"],
+            rows,
             include_original=args.get("include_original", True),
             include_morphology=args.get("include_morphology", False),
             numbering=result["numbering"],
-            note=lxx_only_note,
+            note=" ".join(part for part in (cap_note, lxx_only_note) if part),
         )
     )
 
