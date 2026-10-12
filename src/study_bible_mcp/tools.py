@@ -1019,9 +1019,10 @@ its perspective (Jewish, Catholic, Reformed, evangelical, academic/critical,
 multi-tradition, or single-author), and its access and licence terms. With a
 `query`, every source that has a linkable search gets a ready-to-open search URL.
 
-Relevant when the server's own data does not cover a question: other authors or
-traditions, journal scholarship on a passage, church fathers, rabbinic
-commentary, Dead Sea Scrolls, Septuagint, or older public-domain books.
+Relevant when the server's own data does not cover a question: where to find
+scholarly articles on a passage (e.g. Psalm 82 or John 10:34), other authors or
+traditions, church fathers, rabbinic commentary, Dead Sea Scrolls, Septuagint
+scholarship, or older public-domain books.
 
 These are places to look, not endorsements; each listing states its perspective
 so the reader can weigh it.""",
