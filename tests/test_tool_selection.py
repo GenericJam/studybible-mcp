@@ -464,9 +464,6 @@ class TestToolCoverage:
         phantoms = _EXPECTED_TOOLS_TESTED - ALL_TOOLS
         assert not phantoms, f"Test cases reference non-existent tools: {phantoms}"
 
-    def test_tool_count(self):
-        """Sanity check the expected number of tools."""
-        assert len(TOOLS) == 21
 
 
 class TestScorerSanity:

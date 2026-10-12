@@ -4,7 +4,7 @@ A plan for adding an interactive Bible reader panel to the Study Bible MCP serve
 
 ## Context
 
-The Study Bible MCP server currently has 18 tools covering lexicons, morphology, cross-references, ANE context, genealogy, and more — all text-in, text-out. When studying a passage, the agent references specific verses and words, but the scripture itself isn't visible alongside the study output. The reader has to open a separate tab or trust the quotation.
+At the time this plan was drafted, the Study Bible MCP server exposed 18 text-only tools covering lexicons, morphology, cross-references, ANE context, genealogy, and more. The current tool list is maintained in the README and the server discovery endpoint. When studying a passage, the agent references specific verses and words, but the scripture itself isn't visible alongside the study output. The reader has to open a separate tab or trust the quotation.
 
 The goal: bring up the actual chapter text in an interactive panel when studying a passage, keep it visible during the study, and enable interactivity between the study output and the scripture panel.
 
@@ -117,7 +117,7 @@ MCP Apps (`io.modelcontextprotocol/ui`) is an official extension to the Model Co
 ┌─────────────────────────────────────────────────┐
 │  studybible-mcp server                          │
 │                                                 │
-│  Existing 18 tools (unchanged)                  │
+│  Existing study tools (unchanged)               │
 │  + New: bible_reader tool (triggers UI)         │
 │  + New: ui://study-bible/reader resource (HTML) │
 │                                                 │
