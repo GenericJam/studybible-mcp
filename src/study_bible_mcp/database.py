@@ -1985,6 +1985,61 @@ def create_schema(conn: sqlite3.Connection):
     conn.commit()
 
 
+def upsert_theology_content(conn: sqlite3.Connection, entry: dict) -> tuple[int, str]:
+    """Insert a theology_content row, or refresh the url of the existing one.
+
+    Rows are identified by (source_work, chapter_or_episode, title), compared with
+    IS so a NULL chapter still matches. An existing row keeps all of its content;
+    only its url is updated, so re-running an importer applies new or corrected
+    source links without duplicating rows.
+
+    Returns (content_id, status) where status is 'inserted', 'url_updated' or
+    'unchanged'.
+    """
+    row = conn.execute(
+        """SELECT id, url FROM theology_content
+           WHERE source_work = ? AND chapter_or_episode IS ? AND title = ?""",
+        (entry["source_work"], entry["chapter_or_episode"], entry["title"]),
+    ).fetchone()
+    if row is not None:
+        content_id, current_url = row
+        if current_url == entry["url"]:
+            return content_id, "unchanged"
+        conn.execute(
+            "UPDATE theology_content SET url = ? WHERE id = ?", (entry["url"], content_id)
+        )
+        return content_id, "url_updated"
+    cursor = conn.execute(
+        """INSERT INTO theology_content
+           (source_work, source_author, source_type, chapter_or_episode,
+            title, content_summary, content_detail, page_range, url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (entry["source_work"], entry["source_author"], entry["source_type"],
+         entry["chapter_or_episode"], entry["title"], entry["content_summary"],
+         entry["content_detail"], entry["page_range"], entry["url"]),
+    )
+    return cursor.lastrowid, "inserted"
+
+
+def link_theology_theme(conn: sqlite3.Connection, theme_key: str, content_id: int) -> None:
+    """Tag a theology_content row with a theme, once.
+
+    Content-level links carry reference NULL, which the UNIQUE(theme_key, content_id,
+    reference) constraint never treats as a duplicate, so INSERT OR IGNORE would add
+    a fresh row on every importer run (inflating theme entry counts).
+    """
+    conn.execute(
+        """INSERT INTO theology_theme_index (theme_key, content_id, reference)
+           SELECT ?, ?, NULL
+           WHERE NOT EXISTS (
+               SELECT 1 FROM theology_theme_index
+               WHERE theme_key = ? AND content_id = ? AND reference IS NULL
+           )""",
+        (theme_key, content_id, theme_key, content_id),
+    )
+
+
+
 def create_vector_tables(conn: sqlite3.Connection):
     """Create vector tables for semantic search using sqlite-vec.
 

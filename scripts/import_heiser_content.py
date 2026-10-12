@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Import theological scholarship content, themes, and textual variants into the study_bible database."""
+"""Import theological scholarship content, themes, and textual variants into the study_bible database.
+
+Re-runnable: rows already present (same source_work, chapter_or_episode, title) are
+not duplicated; only their url is refreshed from the data files.
+
+Usage: python scripts/import_heiser_content.py [db_path]
+"""
 
 from __future__ import annotations
 
@@ -11,11 +17,14 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from study_bible_mcp.database import link_theology_theme, upsert_theology_content
 from study_bible_mcp.parsers.heiser import parse_themes_file, parse_heiser_content_file
 
 
 def get_db_path() -> Path:
-    """Get the database path."""
+    """Get the database path: the first CLI argument, else db/study_bible.db."""
+    if len(sys.argv) > 1:
+        return Path(sys.argv[1])
     return Path(__file__).resolve().parent.parent / "db" / "study_bible.db"
 
 
@@ -44,48 +53,25 @@ def import_themes(conn: sqlite3.Connection, themes_path: Path) -> int:
     return count
 
 
-def import_content_file(conn: sqlite3.Connection, filepath: Path) -> tuple[int, int, int]:
+def import_content_file(conn: sqlite3.Connection, filepath: Path) -> tuple[int, int, int, int]:
     """Import a single Heiser content JSON file.
 
-    Returns (entries_imported, verse_refs_imported, theme_links_imported).
+    Existing rows keep their content but have their url refreshed.
+
+    Returns (entries_imported, urls_updated, verse_refs_imported, theme_links_imported).
     """
     entries = 0
+    urls_updated = 0
     refs = 0
     themes = 0
 
     for content_entry, verse_refs, theme_keys in parse_heiser_content_file(filepath):
         try:
-            cursor = conn.execute(
-                """INSERT OR IGNORE INTO theology_content
-                   (source_work, source_author, source_type, chapter_or_episode,
-                    title, content_summary, content_detail, page_range, url)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    content_entry["source_work"],
-                    content_entry["source_author"],
-                    content_entry["source_type"],
-                    content_entry["chapter_or_episode"],
-                    content_entry["title"],
-                    content_entry["content_summary"],
-                    content_entry["content_detail"],
-                    content_entry["page_range"],
-                    content_entry["url"],
-                ),
-            )
-            if cursor.rowcount == 0:
-                # Already exists, get the existing ID
-                row = conn.execute(
-                    """SELECT id FROM theology_content
-                       WHERE source_work = ? AND chapter_or_episode IS ? AND title = ?""",
-                    (content_entry["source_work"], content_entry["chapter_or_episode"], content_entry["title"]),
-                ).fetchone()
-                content_id = row[0] if row else None
-            else:
-                content_id = cursor.lastrowid
+            content_id, status = upsert_theology_content(conn, content_entry)
+            if status == "inserted":
                 entries += 1
-
-            if content_id is None:
-                continue
+            elif status == "url_updated":
+                urls_updated += 1
 
             # Insert verse references
             for vref in verse_refs:
@@ -104,12 +90,7 @@ def import_content_file(conn: sqlite3.Connection, filepath: Path) -> tuple[int, 
             # Insert theme links
             for theme_key in theme_keys:
                 try:
-                    conn.execute(
-                        """INSERT OR IGNORE INTO theology_theme_index
-                           (theme_key, content_id, reference)
-                           VALUES (?, ?, NULL)""",
-                        (theme_key, content_id),
-                    )
+                    link_theology_theme(conn, theme_key, content_id)
                     themes += 1
                 except sqlite3.Error:
                     pass
@@ -118,7 +99,7 @@ def import_content_file(conn: sqlite3.Connection, filepath: Path) -> tuple[int, 
             print(f"  Warning: Failed to insert entry '{content_entry.get('title', '?')}': {e}")
 
     conn.commit()
-    return entries, refs, themes
+    return entries, urls_updated, refs, themes
 
 
 def import_textual_variants(conn: sqlite3.Connection, variants_dir: Path) -> int:
@@ -205,18 +186,22 @@ def main():
     # 2. Import content files
     content_dir = data_dir / "content"
     total_entries = 0
+    total_urls = 0
     total_refs = 0
     total_themes = 0
     json_files = sorted(content_dir.glob("*.json"))
     print(f"\n[Content] Found {len(json_files)} content files")
     for filepath in json_files:
-        entries, refs, themes = import_content_file(conn, filepath)
+        entries, urls, refs, themes = import_content_file(conn, filepath)
         total_entries += entries
+        total_urls += urls
         total_refs += refs
         total_themes += themes
-        print(f"  {filepath.name}: {entries} entries, {refs} verse refs, {themes} theme links")
+        print(f"  {filepath.name}: {entries} entries, {urls} urls updated, "
+              f"{refs} verse refs, {themes} theme links")
 
-    print(f"\n[Content Totals] {total_entries} entries, {total_refs} verse refs, {total_themes} theme links")
+    print(f"\n[Content Totals] {total_entries} entries, {total_urls} urls updated, "
+          f"{total_refs} verse refs, {total_themes} theme links")
 
     # 3. Import textual variants
     variants_dir = data_dir / "variants"

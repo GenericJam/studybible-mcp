@@ -10,9 +10,12 @@ Sources (all verse-anchored study-note cells authored as original summaries):
   data/reformed_evangelical/themes.json   -- shared theme taxonomy
 
 Targets theology_content + theology_verse_index + theology_theme_index, exactly
-like scripts/ingest_atonement_synthesis.py. Fully re-runnable: content uses
-INSERT OR IGNORE keyed on UNIQUE(source_work, chapter_or_episode, title); themes
-use INSERT OR REPLACE; verse/theme index rows use INSERT OR IGNORE.
+like scripts/ingest_atonement_synthesis.py. Fully re-runnable: content rows are
+keyed on (source_work, chapter_or_episode, title); an existing row keeps its
+content and only has its url refreshed; themes use INSERT OR REPLACE; verse index
+rows use INSERT OR IGNORE and theme links are added only if missing.
+
+Usage: python scripts/ingest_reformed_evangelical.py [db_path]
 
 Does NOT deploy. After a clean local run, deploy to Fly separately (deploy-db).
 """
@@ -26,6 +29,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from study_bible_mcp.database import link_theology_theme, upsert_theology_content
 from study_bible_mcp.parsers.heiser import parse_themes_file, parse_heiser_content_file
 
 DB_PATH = ROOT / "db" / "study_bible.db"
@@ -56,7 +60,7 @@ def import_themes(conn: sqlite3.Connection) -> int:
 
 
 def import_content(conn: sqlite3.Connection) -> None:
-    n_entries = n_refs = n_themes = n_files = 0
+    n_entries = n_urls = n_refs = n_themes = n_files = 0
     missing_themes: set[str] = set()
     known_themes = {r[0] for r in conn.execute("SELECT theme_key FROM theology_themes")}
 
@@ -67,30 +71,11 @@ def import_content(conn: sqlite3.Connection) -> None:
         for filepath in sorted(content_dir.glob("*.json")):
             n_files += 1
             for content_entry, verse_refs, theme_keys in parse_heiser_content_file(filepath):
-                cursor = conn.execute(
-                    """INSERT OR IGNORE INTO theology_content
-                       (source_work, source_author, source_type, chapter_or_episode,
-                        title, content_summary, content_detail, page_range, url)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (content_entry["source_work"], content_entry["source_author"],
-                     content_entry["source_type"], content_entry["chapter_or_episode"],
-                     content_entry["title"], content_entry["content_summary"],
-                     content_entry["content_detail"], content_entry["page_range"],
-                     content_entry["url"]),
-                )
-                if cursor.rowcount == 0:
-                    row = conn.execute(
-                        """SELECT id FROM theology_content
-                           WHERE source_work = ? AND chapter_or_episode IS ? AND title = ?""",
-                        (content_entry["source_work"], content_entry["chapter_or_episode"],
-                         content_entry["title"]),
-                    ).fetchone()
-                    content_id = row[0] if row else None
-                else:
-                    content_id = cursor.lastrowid
+                content_id, status = upsert_theology_content(conn, content_entry)
+                if status == "inserted":
                     n_entries += 1
-                if content_id is None:
-                    continue
+                elif status == "url_updated":
+                    n_urls += 1
                 for vref in verse_refs:
                     conn.execute(
                         """INSERT OR IGNORE INTO theology_verse_index
@@ -103,15 +88,11 @@ def import_content(conn: sqlite3.Connection) -> None:
                 for theme_key in theme_keys:
                     if theme_key not in known_themes:
                         missing_themes.add(theme_key)
-                    conn.execute(
-                        """INSERT OR IGNORE INTO theology_theme_index
-                           (theme_key, content_id, reference) VALUES (?, ?, NULL)""",
-                        (theme_key, content_id),
-                    )
+                    link_theology_theme(conn, theme_key, content_id)
                     n_themes += 1
 
     print(f"  [content] {n_files} files, {n_entries} new content entries, "
-          f"{n_refs} verse refs, {n_themes} theme links")
+          f"{n_urls} urls updated, {n_refs} verse refs, {n_themes} theme links")
     if missing_themes:
         print("  [WARN] theme keys used by cells but absent from theology_themes:")
         for k in sorted(missing_themes):
@@ -120,13 +101,14 @@ def import_content(conn: sqlite3.Connection) -> None:
 
 
 def main() -> None:
-    if not DB_PATH.exists():
-        print(f"Database not found at {DB_PATH}")
+    db_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DB_PATH
+    if not db_path.exists():
+        print(f"Database not found at {db_path}")
         sys.exit(1)
     print("=" * 60)
     print("Ingesting Reformed-evangelical corpus (Owen / Stott / Lennox)")
     print("=" * 60)
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(db_path))
     import_themes(conn)
     import_content(conn)
     conn.commit()

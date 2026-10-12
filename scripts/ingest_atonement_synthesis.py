@@ -12,8 +12,10 @@ Two targets, both idempotent:
      The prescriptive "representation-frame read-order" protocol, complementing the
      existing Rillera/Milgrom non-penal corpus (method_005-007, relig_012-021, death_008).
 
-Re-runnable: theology inserts use INSERT OR IGNORE / OR REPLACE; the ANE load uses
-INSERT OR REPLACE + delete-then-insert for book mappings (NULL chapter_start safe).
+Re-runnable: theology content is keyed on (source_work, chapter_or_episode, title)
+(an existing row only has its url refreshed), themes use INSERT OR REPLACE, verse
+index rows INSERT OR IGNORE and theme links are added only if missing; the ANE load
+uses INSERT OR REPLACE + delete-then-insert for book mappings (NULL chapter_start safe).
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from study_bible_mcp.database import link_theology_theme, upsert_theology_content
 from study_bible_mcp.parsers.heiser import parse_themes_file, parse_heiser_content_file
 from study_bible_mcp.parsers.ane_context import parse_ane_context_file
 
@@ -49,30 +52,9 @@ def import_theology(conn: sqlite3.Connection) -> None:
     n_entries = n_refs = n_themes = 0
     for filepath in sorted((SYNTH_DIR / "content").glob("*.json")):
         for content_entry, verse_refs, theme_keys in parse_heiser_content_file(filepath):
-            cursor = conn.execute(
-                """INSERT OR IGNORE INTO theology_content
-                   (source_work, source_author, source_type, chapter_or_episode,
-                    title, content_summary, content_detail, page_range, url)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (content_entry["source_work"], content_entry["source_author"],
-                 content_entry["source_type"], content_entry["chapter_or_episode"],
-                 content_entry["title"], content_entry["content_summary"],
-                 content_entry["content_detail"], content_entry["page_range"],
-                 content_entry["url"]),
-            )
-            if cursor.rowcount == 0:
-                row = conn.execute(
-                    """SELECT id FROM theology_content
-                       WHERE source_work = ? AND chapter_or_episode IS ? AND title = ?""",
-                    (content_entry["source_work"], content_entry["chapter_or_episode"],
-                     content_entry["title"]),
-                ).fetchone()
-                content_id = row[0] if row else None
-            else:
-                content_id = cursor.lastrowid
+            content_id, status = upsert_theology_content(conn, content_entry)
+            if status == "inserted":
                 n_entries += 1
-            if content_id is None:
-                continue
             for vref in verse_refs:
                 conn.execute(
                     """INSERT OR IGNORE INTO theology_verse_index
@@ -83,11 +65,7 @@ def import_theology(conn: sqlite3.Connection) -> None:
                 )
                 n_refs += 1
             for theme_key in theme_keys:
-                conn.execute(
-                    """INSERT OR IGNORE INTO theology_theme_index
-                       (theme_key, content_id, reference) VALUES (?, ?, NULL)""",
-                    (theme_key, content_id),
-                )
+                link_theology_theme(conn, theme_key, content_id)
                 n_themes += 1
     print(f"  [theology] {n_entries} new content entries, {n_refs} verse refs, {n_themes} theme links")
 

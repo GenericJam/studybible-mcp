@@ -875,6 +875,34 @@ These entries are **original summary prose written for this database**, describi
 
 John Owen (d. 1683) is in the public domain, so those entries are cited directly by work.
 
+#### Source links
+
+An entry's `url` is shown as **Source URL** in `get_theology_context` output. Links are added only where the source itself is legitimately free online:
+
+| Author | Link target |
+|---|---|
+| Owen | Free public-domain text: the [CCEL](https://ccel.org/ccel/owen) chapter or part the entry draws on (Communion with God, The Death of Death, The Glory of Christ, Justification, Mortification, Indwelling Sin); for the Exposition of Hebrews, which CCEL lacks, the Monergism PDF of the volume covering that chapter |
+| Heiser | His papers on thedivinecouncil.com / drmsh.com / Liberty Digital Commons, and Naked Bible podcast transcripts |
+| Burnett | His own serialisation of the argument on drmsh.com (based on his SBL paper); the JSPL article itself is not openly hosted |
+| Bradley, Stott, Lennox | None: no free copy hosted by the author or publisher |
+
+In the content JSON, a file-level `url` applies to every entry; an entry-level `url` (for example a chapter page) overrides it.
+
+#### Applying data changes to an existing database
+
+The importers are re-runnable. A row that already exists (same `source_work`, `chapter_or_episode`, `title`) is not duplicated and keeps its content; only its `url` is refreshed. To apply new or corrected links to an existing DB:
+
+```bash
+DB=db/study_bible.db
+python scripts/relabel_theology_sources.py $DB      # no-op if already relabelled
+python scripts/import_heiser_content.py $DB
+python scripts/import_bradley_content.py $DB
+python scripts/ingest_reformed_evangelical.py $DB    # Owen, Stott, Lennox
+python scripts/ingest_burnett_gage.py --theology-only $DB
+```
+
+The relabel step must come first on a DB built before the descriptive labels: the data files now use those labels as `source_work`, so an unrelabelled DB would not match and would gain duplicate rows.
+
 ### Ancient Near East Context
 
 The 87 ANE entries are likewise original summary prose describing scholarly consensus on ANE background, with the standard reference works named as sources rather than quoted.

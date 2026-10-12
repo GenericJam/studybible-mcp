@@ -3,12 +3,22 @@
 (John ↔ Revelation typology) into cross_references and theology_content.
 
 Idempotent: deletes existing rows where type IN ('gage','burnett') in
-cross_references, and theology_content rows where source_work LIKE 'Burnett:%',
+cross_references, and theology_content rows where source_author = 'burnett',
 before inserting fresh.
 
 Sources:
   data/bradley_gage_john_rev.xlsx  — Bradley/Gage John↔Rev typology spreadsheet
   data/Burnett-JSPL5.2.pdf         — Burnett, "So Shall Your Seed Be" JSPL 5.2 (2015)
+
+The Burnett theology blocks link to Burnett's own free serialisation of the same
+argument (a guest series on drmsh.com, based on his SBL paper); the JSPL article
+itself is not openly hosted.
+
+Usage:
+  python scripts/ingest_burnett_gage.py [db_path]
+  python scripts/ingest_burnett_gage.py --theology-only [db_path]
+      (re-load only the Burnett theology_content blocks, e.g. to apply url
+       changes to an existing DB; needs neither the xlsx nor openpyxl)
 """
 
 from __future__ import annotations
@@ -19,7 +29,6 @@ import sqlite3
 import sys
 from pathlib import Path
 
-import openpyxl
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "db" / "study_bible.db"
@@ -115,6 +124,8 @@ def to_usfm(book: str, chapter: int, verse: int) -> str:
 # Bradley / Gage: John ↔ Revelation typology
 # =============================================================================
 def collect_gage_pairs() -> list[dict]:
+    import openpyxl
+
     wb = openpyxl.load_workbook(XLSX_PATH, data_only=False)
     pairs: list[dict] = []
     skipped_unparsed = 0
@@ -275,7 +286,7 @@ BURNETT_PAIRS = [
 # =============================================================================
 BURNETT_THEOLOGY = [
     {
-        "source_work": "Burnett: So Shall Your Seed Be (JSPL 5.2, 2015)",
+        "source_work": "Burnett — So Shall Your Seed Be (JSPL 5.2, 2015)",
         "source_author": "burnett",
         "source_type": "article",
         "chapter_or_episode": "Main thesis",
@@ -307,7 +318,7 @@ BURNETT_THEOLOGY = [
             "Each of these is rooted in the same star-seed tradition Paul activates with Gen 15:5."
         ),
         "page_range": "211-236",
-        "url": None,
+        "url": "https://drmsh.com/pauls-use-of-genesis-155-in-romans-418-in-light-of-early-jewish-deification-traditions-part-1-introduction/",
         "verses": [
             ("Gen.15.5", "primary"), ("Gen.22.17", "primary"), ("Gen.26.4", "primary"),
             ("Rom.4.18", "primary"), ("Rom.4.17", "primary"), ("Rom.4.13", "primary"),
@@ -320,7 +331,7 @@ BURNETT_THEOLOGY = [
         ],
     },
     {
-        "source_work": "Burnett: So Shall Your Seed Be (JSPL 5.2, 2015)",
+        "source_work": "Burnett — So Shall Your Seed Be (JSPL 5.2, 2015)",
         "source_author": "burnett",
         "source_type": "article",
         "chapter_or_episode": "Second Temple background",
@@ -344,7 +355,7 @@ BURNETT_THEOLOGY = [
             "what produces the purely-numerical reading Burnett is correcting."
         ),
         "page_range": "220-229",
-        "url": None,
+        "url": "https://drmsh.com/pauls-use-of-genesis-155-in-romans-418-in-light-of-early-jewish-deification-traditions-part-2-early-jewish-qualitative-interpretation-of-genesis-155-and-related-texts/",
         "verses": [
             ("Gen.15.5", "primary"), ("Gen.22.17", "primary"), ("Gen.26.4", "primary"),
             ("Rom.4.18", "primary"), ("Rom.4.13", "supporting"),
@@ -352,7 +363,7 @@ BURNETT_THEOLOGY = [
         ],
     },
     {
-        "source_work": "Burnett: So Shall Your Seed Be (JSPL 5.2, 2015)",
+        "source_work": "Burnett — So Shall Your Seed Be (JSPL 5.2, 2015)",
         "source_author": "burnett",
         "source_type": "article",
         "chapter_or_episode": "Divine-council frame",
@@ -378,7 +389,7 @@ BURNETT_THEOLOGY = [
             "describes the same dominion 'from sea to sea.'"
         ),
         "page_range": "230-235",
-        "url": None,
+        "url": "https://drmsh.com/pauls-use-of-genesis-155-in-romans-418-in-light-of-early-jewish-deification-traditions-part-3-becoming-as-the-stars-and-the-inheritance-of-the-nations/",
         "verses": [
             ("Deu.32.8", "primary"), ("Deu.32.9", "primary"), ("Deu.4.19", "primary"),
             ("Gen.15.5", "primary"), ("Rom.4.13", "primary"), ("Rom.4.18", "primary"),
@@ -486,23 +497,30 @@ def insert_theology(conn: sqlite3.Connection):
 
 
 def main():
-    if not DB_PATH.exists():
-        print(f"DB not found: {DB_PATH}")
+    args = sys.argv[1:]
+    theology_only = "--theology-only" in args
+    paths = [a for a in args if a != "--theology-only"]
+    db_path = Path(paths[0]) if paths else DB_PATH
+    if not db_path.exists():
+        print(f"DB not found: {db_path}")
         sys.exit(1)
-    if not XLSX_PATH.exists():
+    if not theology_only and not XLSX_PATH.exists():
         print(f"xlsx not found: {XLSX_PATH}")
         sys.exit(1)
 
     print("=" * 60)
-    print("Ingesting Burnett + Gage/Bradley")
+    print("Ingesting Burnett theology blocks" if theology_only else "Ingesting Burnett + Gage/Bradley")
     print("=" * 60)
 
-    print("\nParsing Bradley/Gage xlsx with author colors...")
-    gage_pairs = collect_gage_pairs()
+    gage_pairs = None
+    if not theology_only:
+        print("\nParsing Bradley/Gage xlsx with author colors...")
+        gage_pairs = collect_gage_pairs()
 
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(db_path))
     try:
-        insert_xrefs(conn, gage_pairs)
+        if gage_pairs is not None:
+            insert_xrefs(conn, gage_pairs)
         insert_theology(conn)
     finally:
         conn.close()
