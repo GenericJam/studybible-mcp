@@ -36,7 +36,7 @@ from .tools import (
     TOOLS, _truncate, format_lexicon_entry, format_verse, format_name_entry,
     format_genealogy, format_person_events, format_place_history,
     format_passage_entities, format_connection_path,
-    format_enriched_verse,
+    format_enriched_verse, format_biblical_version_comparison,
     mermaid_genealogy, mermaid_connection_path, mermaid_person_timeline,
     mermaid_place_network,
     format_study_notes, format_dictionary_article, format_key_terms,
@@ -244,6 +244,115 @@ async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
     result += xref_hint
 
     return text(result)
+
+
+# compare_biblical_versions returns at most this many verses per call.
+MAX_COMPARISON_VERSES = 10
+_REFERENCE_BOOK = re.compile(r"^\s*(.*?\D)\s*\d+(?:\s*:\s*\d+)?(?:\s*[-–—]\s*\d+(?:\s*:\s*\d+)?)?\s*$")
+
+
+def _cap_comparison_rows(
+    reference: str, rows: list[dict], numbering: str
+) -> tuple[list[dict], str]:
+    """Keep the first MAX_COMPARISON_VERSES verse groups; say where to resume."""
+    def group(row: dict) -> str:
+        return row.get("canonical_reference") or f"LXX-only {row['edition_reference']}"
+
+    groups = list(dict.fromkeys(group(row) for row in rows))
+    if len(groups) <= MAX_COMPARISON_VERSES:
+        return rows, ""
+    kept = set(groups[:MAX_COMPARISON_VERSES])
+    resume_rows = [row for row in rows if group(row) == groups[MAX_COMPARISON_VERSES]]
+    # Greek numbering resumes from the LXX row's own edition reference.
+    resume_row = next((row for row in resume_rows if row["version"] == "LXX"), resume_rows[0])
+    book = _REFERENCE_BOOK.match(reference)
+    if numbering == "canonical" and book and resume_row.get("canonical_chapter"):
+        resume = (
+            f"'{book.group(1).strip()} {resume_row['canonical_chapter']}:"
+            f"{resume_row['canonical_verse']}'"
+        )
+    else:
+        resume = f"{resume_row['edition_reference']} (numbering='lxx')"
+    note = (
+        f"Showing the first {MAX_COMPARISON_VERSES} of {len(groups)} verses. "
+        f"Continue from {resume} in another call."
+    )
+    return [row for row in rows if group(row) in kept], note
+
+
+async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextContent]:
+    """Compare MT/LXX rows with explicit per-verse provenance."""
+    reference = args.get("reference", "").strip()
+    if not reference:
+        return text("Please provide a verse reference (e.g., 'Psalm 24:1').")
+
+    requested = args.get("versions", ["MT", "LXX"])
+    if not isinstance(requested, list) or not requested:
+        return text("'versions' must be a non-empty list containing MT and/or LXX.")
+    versions = list(dict.fromkeys(str(version).upper() for version in requested))
+    unsupported = [version for version in versions if version not in {"MT", "LXX"}]
+    if unsupported:
+        return text(f"Unsupported biblical version(s): {', '.join(unsupported)}. Use MT and/or LXX.")
+    numbering = str(args.get("numbering", "canonical")).lower()
+    if numbering not in {"canonical", "lxx"}:
+        return text(f"Unsupported numbering '{numbering}'. Use 'canonical' (MT/English) or 'lxx' (Greek edition).")
+
+    result = await db.compare_biblical_versions(reference, versions, numbering)
+    status = result["status"]
+    if status == "invalid_reference":
+        return text(
+            f"Could not parse '{reference}'. Use 'Book chapter:verse' (e.g. 'Psalm 82:6'), "
+            "a range within or across chapters ('Psalm 82:1-8', 'Psalm 81:6-82:1'), "
+            "or a whole chapter ('Psalm 82')."
+        )
+    if status == "new_testament":
+        return text(
+            f"{reference} is a New Testament reference. compare_biblical_versions covers "
+            "Old Testament and Septuagint books only; use lookup_verse for New Testament text."
+        )
+    if status == "unsupported_book":
+        return text(
+            f"'{result['book']}' is not a book covered by compare_biblical_versions. Supported: "
+            "the Old Testament books (MT and LXX) and the Septuagint-only books Tobit, Judith, "
+            "Wisdom, Sirach, Baruch, Letter of Jeremiah, 1-4 Maccabees, 1-2 Esdras, Greek Esther, "
+            "Susanna, Bel and the Dragon, Odes, and Psalms of Solomon."
+        )
+    if status == "missing_data":
+        return text(
+            "Septuagint comparison data is not in this database (table "
+            "biblical_version_verses is missing or empty). Run "
+            "`python scripts/upgrade_database.py` to add it."
+        )
+    lxx_only_note = ""
+    if result["lxx_only"]:
+        listed = ", ".join(
+            f"{row['edition_reference']} ({row['edition']})" for row in result["lxx_only"]
+        )
+        lxx_only_note = (
+            "LXX-only verses with no MT counterpart occupy this position in Greek edition "
+            f"numbering: {listed}. Request numbering='lxx' to view them."
+        )
+    if status == "no_match":
+        if result["lxx_only_book"] and "LXX" not in versions:
+            return text(
+                f"{reference} is in a Septuagint-only book with no Masoretic Text; "
+                "include 'LXX' in versions."
+            )
+        scheme = "Greek edition" if result["numbering"] == "lxx" else "canonical MT/English"
+        message = f"No {' or '.join(versions)} text found for {reference} ({scheme} numbering)."
+        return text(f"{message}\n\n{lxx_only_note}" if lxx_only_note else message)
+
+    rows, cap_note = _cap_comparison_rows(reference, result["rows"], result["numbering"])
+    return text(
+        format_biblical_version_comparison(
+            reference,
+            rows,
+            include_original=args.get("include_original", True),
+            include_morphology=args.get("include_morphology", False),
+            numbering=result["numbering"],
+            note=" ".join(part for part in (cap_note, lxx_only_note) if part),
+        )
+    )
 
 
 async def handle_search_lexicon(args: dict[str, Any]) -> list[TextContent]:
@@ -1121,6 +1230,7 @@ async def handle_get_textual_variant(args: dict[str, Any]) -> list[TextContent]:
 _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
+    "compare_biblical_versions": handle_compare_biblical_versions,
     "search_lexicon": handle_search_lexicon,
     "get_cross_references": handle_get_cross_references,
     "lookup_name": handle_lookup_name,

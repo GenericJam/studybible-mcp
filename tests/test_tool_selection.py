@@ -2,11 +2,10 @@
 Tests for agent tool selection.
 
 Verifies that given a natural language user query (without naming a tool),
-a keyword-based scorer selects the correct tool from the 17 available.
-
-This validates that tool names, descriptions, and parameter descriptions
-contain sufficient discriminating keywords for an LLM agent to pick the
-right tool for each type of question.
+a keyword-based scorer selects the expected registered tool. This validates
+that tool names, descriptions, and parameter descriptions contain sufficient
+discriminating keywords for an LLM agent to pick the right tool for each type
+of question.
 """
 
 import math
@@ -176,6 +175,16 @@ class TestLookupVerseSelection:
 
     def test_quote_verse(self):
         assert best_tool("Display the verse Ephesians 2:8") == "lookup_verse"
+
+
+class TestCompareBiblicalVersionsSelection:
+    """Queries that should route to compare_biblical_versions."""
+
+    def test_compare_mt_and_lxx(self):
+        assert best_tool("Compare the Masoretic Text and Septuagint for Psalm 24:1") == "compare_biblical_versions"
+
+    def test_septuagint_version(self):
+        assert best_tool("Show the LXX version alongside the MT for Deuteronomy 32:8") == "compare_biblical_versions"
 
 
 class TestSearchLexiconSelection:
@@ -438,7 +447,8 @@ ALL_TOOLS = {tool.name for tool in TOOLS}
 
 # Every test case above, collected for coverage checking
 _EXPECTED_TOOLS_TESTED = {
-    "word_study", "lookup_verse", "search_lexicon", "get_cross_references",
+    "word_study", "lookup_verse", "compare_biblical_versions",
+    "search_lexicon", "get_cross_references",
     "lookup_name", "parse_morphology", "search_by_strongs",
     "find_similar_passages", "explore_genealogy", "people_in_passage",
     "explore_person_events", "explore_place", "find_connection",

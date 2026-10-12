@@ -161,6 +161,68 @@ Returns:
 - Genre guidance: "Epistles - What problem was being addressed?"
 ```
 
+#### `compare_biblical_versions`
+
+Compare the Masoretic Text and Septuagint with explicit per-verse provenance.
+Covers Old Testament and Septuagint books only. Rows that share a canonical
+(MT/English) reference appear under one header, while each row keeps its own
+edition reference, so Hebrew/Greek Psalm numbering and other mapped
+versification shifts stay visible. Psalm 82:6, for example, shows MT `Psa.82.6`
+and LXX `Psa.81.6`; Psalm 40:6 shows MT `Psa.40.7` (Hebrew numbering) and LXX
+`Psa.39.7`.
+
+```text
+compare_biblical_versions(
+  reference="Psalm 24:1",        # also "Psalm 82:1-8", "Psalm 81:6-82:1", "Psalm 82"
+  versions=["MT", "LXX"],
+  numbering="canonical",          # or "lxx" to read the reference in Greek numbering
+  include_original=true,
+  include_morphology=false
+)
+```
+
+Each edition row names its version, edition, and edition reference (plus the
+versification mapping whenever it is not `identity`), then its original text and
+English. Licences, source URLs, translation labels, the verse-mapping credit, and
+the Brenton caveat are listed once in a closing **Sources** block rather than on
+every row. A call returns at most 10 verses; a longer range or chapter is cut
+there with a note naming the verse to continue from.
+
+- **MT** comes from the STEPBible TAHOT verses already in the database (Westminster
+  Leningrad Codex). Its English is STEPBible word glosses (interlinear, not a
+  translation).
+- **LXX** covers all 59 books of the Rahlfs source edition. Brenton's English is
+  shown only for the recension Brenton translated (Theodotion for Daniel, Susanna
+  and Bel; Vaticanus B for Joshua and Judges); Old Greek and Alexandrinus rows say
+  the translation is not available for that edition.
+- **Brenton's English is not a translation of the Rahlfs text.** Brenton (1844)
+  translated his own Greek edition, based chiefly on Codex Vaticanus, and his
+  English sometimes departs even from that Greek. Every row with his English
+  carries a note saying so. Each such verse is also compared with
+  [Brenton's own Greek](https://ebible.org/details.php?id=grcbrent) after
+  spelling noise is removed: accents, breathings, case, punctuation, elision,
+  movable nu, itacism (ει/ι), doubled consonants, nasal assimilation, crasis,
+  Hellenistic spellings (λήμψομαι/λήψομαι), word division (ἀνὰ μέσον/ἀναμέσον),
+  name spellings, and one-letter keying errors in Brenton's digital text. Where
+  his Greek still adds, lacks, substitutes, or reorders words, the row shows a
+  warning, a difference summary, and Brenton's Greek as the text his English
+  translates. Deuteronomy 32:43, for example, reports "word order differs (υἱοὶ
+  ἄγγελοι)", and Psalm 40:6 reports "Brenton's Greek reads σῶμα for ὠτία".
+  Differing verse divisions do not count as differences. About 38% of the
+  28,314 rows with Brenton's English are flagged. Unflagged rows (Sirach 17:17,
+  where the English adds words his Greek lacks) can still differ, because a
+  Greek-to-Greek comparison cannot see where his English departs from his own
+  Greek.
+- **LXX-only verses** (pluses such as the Prayer of Azariah, Psalm 151, and the
+  Septuagint-only books) have no canonical MT position, so they never appear as
+  the counterpart of a different MT verse. Request them with `numbering="lxx"`; a
+  canonical lookup notes when such verses sit at the same Greek-numbered
+  position. Septuagint-only books (Tobit, Sirach, ...) always use Greek numbering.
+
+New Testament references, unparseable references, and references with no
+matching verses each return a specific message. A database without the
+Septuagint table tells you to run `python scripts/upgrade_database.py`.
+
 #### 2. `word_study`
 
 Deep dive into a Greek or Hebrew word's meaning, usage, and etymology. Greek entries include both the full Liddell-Scott-Jones (LSJ) definition for classical breadth and the Abbott-Smith definition for NT-specific insight (with LXX/Hebrew equivalents, synonym discussions, and NT occurrence counts). Hebrew entries include the full Brown-Driver-Briggs (BDB) definition.
@@ -780,10 +842,12 @@ studybible-mcp/
 │       ├── aquifer.py         # BibleAquifer JSON parser
 │       ├── acai.py            # ACAI entity annotation parser
 │       ├── ane_context.py     # ANE cultural context parser
+│       ├── biblical_versions.py # MT/LXX text, morphology, and versification
 │       ├── tagged_text.py     # TAGNT/TAHOT morphology parsers
 │       └── proper_names.py    # TIPNR name parser
 ├── scripts/
-│   ├── download_stepbible.py  # Download all source data (--aquifer flag)
+│   ├── download_stepbible.py  # Download base source data (--aquifer flag)
+│   ├── download_biblical_versions.py # Download pinned LXX/Brenton sources
 │   ├── build_database.py      # Build SQLite database
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
@@ -818,6 +882,34 @@ Biblical text and brief lexicon data come from the [STEPBible project](https://w
 | **TAHOT** | Translators Amalgamated Hebrew OT (4 parts) | Every word of the Hebrew OT with morphology, Strong's numbers, glosses |
 | **TIPNR** | Translators Proper Names | 4,299 biblical people, places, and things with references |
 | **TEGMC/TEHMC** | Morphology Codes | Grammatical parsing code definitions |
+
+### Septuagint and MT versification
+
+The LXX comparison corpus uses the complete 59-book
+[OpenScriptorium `lxx-morph`](https://github.com/OpenScriptorium/lxx-morph)
+Rahlfs morphology dataset, pinned to commit
+`c91f6b1e8fb3ba37df701e6ae31f675ace71a2b2`. Its explicit
+`verse_pairs.jsonl` mapping resolves Psalm numbering, Jeremiah's chapter order,
+2 Esdras, and smaller MT/LXX shifts. That mapping is derived in part from
+[TVTMS](https://github.com/STEPBible/STEPBible-Data) (Tyndale Versification
+Traditions Mapping System), CC BY 4.0, created by STEPBible.org / Tyndale House
+Cambridge. Downloads are checked against the pinned
+Git blob hashes. Morphology is CC BY 4.0; the underlying Rahlfs (1935) Greek
+text is public domain. Only the LXX rows are stored (about 35 MB including
+indexes, with word morphology zlib-compressed); MT rows are read from the
+existing TAHOT `verses` table at query time.
+
+English LXX translations come from the public-domain
+[Brenton Septuagint at eBible.org](https://ebible.org/details.php?id=eng-Brenton),
+and Brenton's own public-domain Greek text from
+[eBible's grcbrent](https://ebible.org/details.php?id=grcbrent)
+(`data/lxx/brenton-greek`). eBible regenerates its unversioned zips, so the
+download script verifies the SHA-256 of every extracted USFM book rather than of
+the archive, and never deletes or overwrites local files that fail verification.
+Brenton's Greek is stored only for the verses where it differs from Rahlfs
+(about 5 MB). `build_database.py` stops with an error if `data/lxx` is present
+but incomplete (any of the 59 morphology books, the mapping, a required Brenton
+English or Greek book, or a manifest-listed file is missing or truncated).
 
 ### BDB Hebrew Lexicon
 
@@ -931,6 +1023,7 @@ Contributions welcome! Especially:
 MIT License. See [LICENSE](LICENSE).
 
 Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+OpenScriptorium LXX morphology and MT/LXX verse mappings (derived in part from STEPBible's TVTMS) are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -941,6 +1034,9 @@ The theology and ANE entries are original summary prose written for this project
 ## Acknowledgments
 
 - [STEPBible](https://www.stepbible.org/) for the freely available biblical data
+- [OpenScriptorium](https://github.com/OpenScriptorium/lxx-morph) for Rahlfs LXX morphology and explicit MT/LXX verse mappings
+- [STEPBible.org / Tyndale House Cambridge](https://github.com/STEPBible/STEPBible-Data) for TVTMS, the versification data behind those mappings
+- [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition

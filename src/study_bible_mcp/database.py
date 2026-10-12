@@ -15,6 +15,22 @@ from typing import Any
 import aiosqlite
 import logging
 
+from .parsers.biblical_versions import (
+    BRENTON_GREEK_SOURCE_URL,
+    BRENTON_TRANSLATION_NOTE,
+    LXX_BOOK_CODES,
+    LXX_LICENSE,
+    LXX_SOURCE_URL,
+    LXX_TRANSLATION_LABEL,
+    MT_BOOK_CODES,
+    MT_EDITION,
+    MT_LICENSE,
+    MT_SOURCE_URL,
+    MT_TRANSLATION_LABEL,
+    MT_VERSIFICATION_METHOD,
+    expand_lxx_morphology,
+)
+
 logger = logging.getLogger("study-bible-mcp")
 
 # Canonical book abbreviation map — used by _normalize_reference() and importable by server.py
@@ -85,7 +101,116 @@ BOOK_ABBREV_MAP = {
     "3 john": "3Jn", "3jn": "3Jn",
     "jude": "Jud",
     "revelation": "Rev", "rev": "Rev",
+    "tobit": "Tob", "tob": "Tob",
+    "judith": "Jdt", "jdt": "Jdt",
+    "wisdom": "Wis", "wisdom of solomon": "Wis", "wis": "Wis",
+    "sirach": "Sir", "ecclesiasticus": "Sir", "sir": "Sir",
+    "baruch": "Bar", "bar": "Bar",
+    "1 maccabees": "1Ma", "1macc": "1Ma", "1 macc": "1Ma",
+    "2 maccabees": "2Ma", "2macc": "2Ma", "2 macc": "2Ma",
+    "3 maccabees": "3Ma", "3macc": "3Ma", "3 macc": "3Ma",
+    "4 maccabees": "4Ma", "4macc": "4Ma", "4 macc": "4Ma",
+    "1 esdras": "1Es", "1esd": "1Es", "1 esd": "1Es",
+    "prayer of manasseh": "Man", "manasseh": "Man",
+    "psalms of solomon": "Pss", "psalm of solomon": "Pss",
+    "greek esther": "EsG", "esther greek": "EsG",
+    "letter of jeremiah": "Lje", "epistle of jeremiah": "Lje",
+    "susanna": "Sus", "bel and the dragon": "Bel",
+    "odes": "Ode",
+    "2 esdras": "2Es", "2esd": "2Es", "2 esd": "2Es",
 }
+_BOOK_CODES_LOWER = {code.lower(): code for code in BOOK_ABBREV_MAP.values()}
+
+_NT_BOOKS = frozenset({
+    "Mat", "Mrk", "Luk", "Jhn", "Act", "Rom", "1Co", "2Co", "Gal", "Eph",
+    "Php", "Col", "1Th", "2Th", "1Ti", "2Ti", "Tit", "Phm", "Heb", "Jas",
+    "1Pe", "2Pe", "1Jn", "2Jn", "3Jn", "Jud", "Rev",
+})
+_MT_BOOKS = frozenset(MT_BOOK_CODES.values())
+_LXX_ONLY_BOOKS = frozenset(LXX_BOOK_CODES.values()) - _MT_BOOKS
+_HEBREW_NUMBERING_RE = re.compile(r"\((\d+)\.(\d+)\)$")
+_PASSAGE_RE = re.compile(
+    r"^(?P<book>\d?\s*[a-z]+(?:\s+[a-z]+)*)\s*"
+    r"(?P<c1>\d+)(?::(?P<v1>\d+)(?P<s1>[a-z]?))?"
+    r"(?:\s*[-–—]\s*(?:(?P<c2>\d+):)?(?P<v2>\d+)(?P<s2>[a-z]?))?$",
+    re.IGNORECASE,
+)
+# Sorts after every verse suffix letter, so a range end includes 8a, 8b, ...
+_LAST_SUFFIX = "~"
+
+
+def book_code(name: str) -> str | None:
+    """Resolve a book name, abbreviation, or compact form ('1john') to its code."""
+    key = re.sub(r"\s+", " ", name.strip().lower())
+    spaced = re.sub(r"^(\d)\s*", r"\1 ", key)
+    for candidate in (key, spaced, key.replace(" ", "")):
+        code = BOOK_ABBREV_MAP.get(candidate) or _BOOK_CODES_LOWER.get(candidate)
+        if code:
+            return code
+    return None
+
+
+def parse_passage_reference(
+    reference: str,
+) -> tuple[str, str | None, tuple[int, int, str], tuple[int, int, str]] | None:
+    """Parse a verse, range (also across chapters), or whole chapter.
+
+    Returns ``(book name, book code or None, start, end)`` where positions are
+    ``(chapter, verse, suffix)`` bounds, or None when the text is unparseable
+    or the range ends before it starts.
+    """
+    match = _PASSAGE_RE.match(reference.strip())
+    if not match:
+        return None
+    parts = match.groupdict()
+    chapter = int(parts["c1"])
+    if parts["v1"] is None:
+        if parts["c2"] or parts["s2"]:
+            return None
+        start = (chapter, 0, "")
+        end_chapter = int(parts["v2"]) if parts["v2"] else chapter
+        end = (end_chapter, 9999, _LAST_SUFFIX)
+    else:
+        start = (chapter, int(parts["v1"]), parts["s1"].lower())
+        if parts["v2"] is None:
+            end = start
+        else:
+            end_chapter = int(parts["c2"]) if parts["c2"] else chapter
+            end = (end_chapter, int(parts["v2"]), parts["s2"].lower() or _LAST_SUFFIX)
+    if end < start:
+        return None
+    return parts["book"].strip(), book_code(parts["book"]), start, end
+
+
+def _lxx_row(row: dict) -> dict:
+    """Attach the constant LXX provenance to a stored biblical_version_verses row.
+
+    Rows with Brenton's English get the standing translation note. Brenton's
+    own Greek (with its source) and the difference summary are kept only when
+    that Greek differs from the Rahlfs text (``brenton_greek_differs`` = 1).
+    """
+    row.update(
+        version="LXX",
+        language="Greek",
+        license=LXX_LICENSE,
+        source_url=LXX_SOURCE_URL,
+        translation_label=LXX_TRANSLATION_LABEL,
+        morphology=expand_lxx_morphology(row["morphology"]),
+        _edition_position=(
+            row.pop("edition_chapter"), row.pop("edition_verse"), row.pop("edition_verse_suffix")
+        ),
+    )
+    if row["translation"]:
+        row["translation_note"] = BRENTON_TRANSLATION_NOTE
+    if row["brenton_greek_differs"]:
+        row["brenton_greek_source_url"] = BRENTON_GREEK_SOURCE_URL
+    else:
+        del row["brenton_greek"], row["brenton_greek_difference"]
+    return row
+
+
+def _group_key(row: dict) -> str:
+    return row["canonical_reference"] or f"LXX-only {row['edition_reference']}"
 
 
 def _sort_theme_lists(rows: list[dict]) -> list[dict]:
@@ -251,15 +376,15 @@ class StudyBibleDB:
         
         # Parse reference like "John 3:16" or "1 Corinthians 13:4-7"
         match = re.match(
-            r'^(\d?\s*[a-zA-Z]+)\s*(\d+):(\d+)(?:-(\d+))?$',
-            reference.strip()
+            r'^(\d?\s*[a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s*(\d+):(\d+[a-z]?)(?:-(\d+[a-z]?))?$',
+            reference.strip(),
+            re.IGNORECASE,
         )
-        
+
         if match:
             book, chapter, verse_start, verse_end = match.groups()
-            book_key = book.lower().strip()
-            book_abbr = BOOK_ABBREV_MAP.get(book_key, book[:3].title())
-            return f"{book_abbr}.{chapter}.{verse_start}"
+            book_abbr = book_code(book) or book[:3].title()
+            return f"{book_abbr}.{chapter}.{verse_start.lower()}"
         
         return reference
     
@@ -1344,6 +1469,171 @@ class StudyBibleDB:
         )
 
 
+    async def compare_biblical_versions(
+        self,
+        reference: str,
+        versions: list[str],
+        numbering: str = "canonical",
+    ) -> dict:
+        """Return MT/LXX edition rows for a verse, range, or chapter.
+
+        ``numbering="canonical"`` reads the reference in MT/English numbering;
+        ``"lxx"`` reads it in the Greek edition's own numbering, which is the
+        only way to reach LXX-only verses (they have no canonical position).
+        Books without an MT (Tobit, Sirach, ...) always use edition numbering.
+
+        Returns a dict with ``status`` (``ok``, ``invalid_reference``,
+        ``unsupported_book``, ``new_testament``, ``missing_data``,
+        ``no_match``), ``book``, ``numbering``, ``lxx_only_book``, ``rows``
+        in display order, and ``lxx_only`` (edition refs of LXX-only verses in
+        the requested Greek-numbered range, for canonical lookups).
+        """
+        result: dict[str, Any] = {
+            "status": "ok", "book": None, "numbering": numbering,
+            "lxx_only_book": False, "rows": [], "lxx_only": [],
+        }
+        parsed = parse_passage_reference(reference)
+        if parsed is None:
+            result["status"] = "invalid_reference"
+            return result
+        book_name, book, start, end = parsed
+        result["book"] = book or book_name
+        if book in _NT_BOOKS:
+            result["status"] = "new_testament"
+            return result
+        if book not in _MT_BOOKS and book not in _LXX_ONLY_BOOKS:
+            result["status"] = "unsupported_book"
+            return result
+        if book in _LXX_ONLY_BOOKS:
+            result["lxx_only_book"] = True
+            numbering = result["numbering"] = "lxx"
+
+        needs_lxx_table = "LXX" in versions or numbering == "lxx"
+        if needs_lxx_table and not await self._table_has_rows("biblical_version_verses"):
+            result["status"] = "missing_data"
+            return result
+
+        version_order = {version: index for index, version in enumerate(versions)}
+        lxx_columns = """edition, canonical_reference, canonical_book, canonical_chapter,
+                         canonical_verse, canonical_verse_suffix, edition_reference,
+                         edition_chapter, edition_verse, edition_verse_suffix,
+                         text, translation, morphology, mapping_method,
+                         brenton_greek_differs, brenton_greek, brenton_greek_difference"""
+
+        if numbering == "lxx":
+            lxx_rows = [
+                _lxx_row(row) for row in await self._fetchall(
+                    f"""SELECT {lxx_columns} FROM biblical_version_verses
+                        WHERE edition_book = ?
+                          AND (edition_chapter, edition_verse, edition_verse_suffix)
+                              BETWEEN (?, ?, ?) AND (?, ?, ?)
+                        ORDER BY edition_chapter, edition_verse, edition_verse_suffix,
+                                 edition, canonical_chapter, canonical_verse""",
+                    (book, *start, *end),
+                )
+            ]
+            groups: dict[str, list[dict]] = {}
+            for row in lxx_rows:
+                groups.setdefault(_group_key(row), [])
+                if "LXX" in versions:
+                    groups[_group_key(row)].append(row)
+            if "MT" in versions:
+                wanted: dict[tuple[str, int], set[int]] = {}
+                for row in lxx_rows:
+                    if row["canonical_book"] in _MT_BOOKS and not row["canonical_verse_suffix"]:
+                        wanted.setdefault(
+                            (row["canonical_book"], row["canonical_chapter"]), set()
+                        ).add(row["canonical_verse"])
+                for (mt_book, chapter), verse_numbers in wanted.items():
+                    for row in await self._fetch_mt_rows(mt_book, (chapter, 0, ""), (chapter, 9999, "~")):
+                        if row["canonical_verse"] in verse_numbers:
+                            groups[row["canonical_reference"]].append(row)
+            for rows in groups.values():
+                rows.sort(key=lambda row: (
+                    version_order.get(row["version"], len(version_order)),
+                    row["edition"], row["_edition_position"],
+                ))
+                result["rows"].extend(rows)
+        else:
+            rows = []
+            if "MT" in versions:
+                rows.extend(await self._fetch_mt_rows(book, start, end))
+            if "LXX" in versions:
+                rows.extend(
+                    _lxx_row(row) for row in await self._fetchall(
+                        f"""SELECT {lxx_columns} FROM biblical_version_verses
+                            WHERE canonical_book = ?
+                              AND (canonical_chapter, canonical_verse, canonical_verse_suffix)
+                                  BETWEEN (?, ?, ?) AND (?, ?, ?)""",
+                        (book, *start, *end),
+                    )
+                )
+                result["lxx_only"] = await self._fetchall(
+                    """SELECT edition, edition_reference FROM biblical_version_verses
+                       WHERE canonical_book IS NULL AND edition_book = ?
+                         AND (edition_chapter, edition_verse, edition_verse_suffix)
+                             BETWEEN (?, ?, ?) AND (?, ?, ?)
+                       ORDER BY edition_chapter, edition_verse, edition_verse_suffix, edition""",
+                    (book, *start, *end),
+                )
+            rows.sort(key=lambda row: (
+                row["canonical_chapter"], row["canonical_verse"], row["canonical_verse_suffix"],
+                version_order.get(row["version"], len(version_order)),
+                row["edition"], row["_edition_position"],
+            ))
+            result["rows"] = rows
+
+        for row in result["rows"]:
+            del row["_edition_position"]
+        if not result["rows"]:
+            result["status"] = "no_match"
+        return result
+
+    async def _fetch_mt_rows(
+        self,
+        book: str,
+        start: tuple[int, int, str],
+        end: tuple[int, int, str],
+    ) -> list[dict]:
+        """Build MT edition rows from TAHOT `verses` (English canonical numbering)."""
+        verses = await self._fetchall(
+            """SELECT reference, chapter, verse, text_original, text_english, word_data
+               FROM verses
+               WHERE book = ? AND text_original IS NOT NULL
+                 AND (chapter, verse, '') BETWEEN (?, ?, ?) AND (?, ?, ?)
+               ORDER BY chapter, verse, id""",
+            (book, *start, *end),
+        )
+        rows = []
+        for verse in verses:
+            canonical = f"{book}.{verse['chapter']}.{verse['verse']}"
+            hebrew = _HEBREW_NUMBERING_RE.search(verse["reference"])
+            edition_position = (
+                (int(hebrew.group(1)), int(hebrew.group(2)), "") if hebrew
+                else (verse["chapter"], verse["verse"], "")
+            )
+            rows.append({
+                "version": "MT",
+                "edition": MT_EDITION,
+                "language": "Hebrew",
+                "canonical_reference": canonical,
+                "canonical_book": book,
+                "canonical_chapter": verse["chapter"],
+                "canonical_verse": verse["verse"],
+                "canonical_verse_suffix": "",
+                "edition_reference": f"{book}.{edition_position[0]}.{edition_position[1]}",
+                "text": verse["text_original"],
+                "translation": verse["text_english"],
+                "translation_label": MT_TRANSLATION_LABEL,
+                "license": MT_LICENSE,
+                "source_url": MT_SOURCE_URL,
+                "morphology": verse["word_data"],
+                "mapping_method": MT_VERSIFICATION_METHOD if hebrew else "identity",
+                "_edition_position": edition_position,
+            })
+        return rows
+
+
     async def get_textual_variants(self, reference: str) -> list[dict]:
         """Get textual variants for a reference, with manuscript witnesses."""
         normalized = self._normalize_reference(reference)
@@ -1861,6 +2151,43 @@ def create_schema(conn: sqlite3.Connection):
         CREATE VIEW IF NOT EXISTS heiser_verse_index AS SELECT * FROM theology_verse_index;
         CREATE VIEW IF NOT EXISTS heiser_themes AS SELECT * FROM theology_themes;
         CREATE VIEW IF NOT EXISTS heiser_theme_index AS SELECT * FROM theology_theme_index;
+
+        -- Septuagint edition texts for compare_biblical_versions. MT rows are
+        -- built at query time from `verses`. edition_* preserves the Greek
+        -- versification; canonical_* is the MT/English position from the
+        -- explicit mapping dataset and is NULL for LXX-only verses that have
+        -- no MT counterpart. Version, language, license, and source URL are
+        -- constant per version and attached at query time.
+        CREATE TABLE IF NOT EXISTS biblical_version_verses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edition TEXT NOT NULL,
+            canonical_reference TEXT,
+            canonical_book TEXT,
+            canonical_chapter INTEGER,
+            canonical_verse INTEGER,
+            canonical_verse_suffix TEXT NOT NULL DEFAULT '',
+            edition_reference TEXT NOT NULL,
+            edition_book TEXT NOT NULL,
+            edition_chapter INTEGER NOT NULL,
+            edition_verse INTEGER NOT NULL,
+            edition_verse_suffix TEXT NOT NULL DEFAULT '',
+            text TEXT NOT NULL,
+            translation TEXT,
+            morphology BLOB,
+            mapping_method TEXT NOT NULL,
+            -- Brenton's English translates his own Greek, not Rahlfs. NULL: no
+            -- Brenton English or Greek for the row; 0: his Greek agrees with
+            -- Rahlfs after orthographic levelling; 1: it differs, and only then
+            -- are his Greek and a difference summary stored.
+            brenton_greek_differs INTEGER,
+            brenton_greek TEXT,
+            brenton_greek_difference TEXT,
+            UNIQUE(edition, edition_reference, canonical_reference)
+        );
+        CREATE INDEX IF NOT EXISTS idx_bvv_canonical
+            ON biblical_version_verses(canonical_book, canonical_chapter, canonical_verse);
+        CREATE INDEX IF NOT EXISTS idx_bvv_edition
+            ON biblical_version_verses(edition_book, edition_chapter, edition_verse);
 
         -- Textual variants (MT vs DSS/LXX/SP)
         CREATE TABLE IF NOT EXISTS textual_variants (

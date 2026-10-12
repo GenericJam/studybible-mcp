@@ -27,12 +27,14 @@ This guide covers running your own instance of the Study Bible MCP server.
    pip install -e ".[sse]"
    ```
 
-4. **Download STEPBible data**
+4. **Download source data**
    ```bash
    python scripts/download_stepbible.py
+   python scripts/download_biblical_versions.py
    ```
-   This downloads ~50MB of lexicon and tagged text data.
-
+   The second command downloads the pinned 59-book Rahlfs morphology corpus,
+   explicit MT/LXX versification mappings, and public-domain Brenton English and
+   Greek USFM. It validates source checksums before import.
 5. **Build the database**
    ```bash
    python scripts/build_database.py

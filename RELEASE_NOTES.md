@@ -2,6 +2,58 @@
 
 ---
 
+## Brenton's English checked against Brenton's own Greek
+
+- Brenton's English translates his own 1844 Greek edition (chiefly Codex
+  Vaticanus), not the Rahlfs text shown beside it. Every LXX row with his
+  English now carries a standing note saying so, and that his English sometimes
+  departs even from his own Greek.
+- Added Brenton's public-domain Greek text (eBible `grcbrent`, stored in
+  `data/lxx/brenton-greek`), pinned by the SHA-256 of each extracted USFM book
+  like the English.
+- Each verse with Brenton's English is compared with his Greek for the same
+  verse after spelling noise is levelled (accents, case, punctuation, elision,
+  movable nu, itacism, doubled consonants, nasal assimilation, crasis,
+  Hellenistic spellings, word division, name spellings, one-letter keying
+  errors) and verse-division differences are absorbed. Rows whose word
+  sequences still differ get a warning, a summary (word order, substitutions,
+  additions, omissions), and Brenton's Greek labelled as the text his English
+  translates: Deuteronomy 32:43 reports "word order differs (υἱοὶ ἄγγελοι)" and
+  Psalm 40:6 "Brenton's Greek reads σῶμα for ὠτία". Psalm 82:6 and Sirach 17:17
+  agree and show only the note.
+- 10,756 of the 28,314 rows with Brenton's English (38%) are flagged. Brenton's
+  Greek and the summary are stored only on flagged rows, which adds about 5 MB to
+  the database. Existing comparison tables gain the new columns on re-import.
+
+---
+
+## Provenance-aware Septuagint comparison
+
+- Added `compare_biblical_versions` with MT/LXX selection and independent
+  original-text and morphology controls. References can be single verses,
+  ranges within or across chapters (`Psalm 81:6-82:1`), or whole chapters
+  (`Psalm 82`); `numbering="lxx"` reads them in Greek edition numbering.
+- Added all 59 books of the pinned Rahlfs morphology corpus plus the
+  public-domain Brenton translation, attached only to the recension Brenton
+  translated (Theodotion Daniel/Susanna/Bel, Vaticanus B Joshua/Judges).
+- MT rows are built at query time from the existing TAHOT verses (English
+  canonical numbering, Hebrew numbering as the edition reference) instead of
+  being copied, so the comparison adds about 35 MB to the database rather than
+  about 200 MB.
+- Every returned row carries version, edition, language, canonical reference,
+  edition reference, text, English, license, and source URL; MT English is
+  labelled as STEPBible word glosses, not a translation.
+- Added explicit MT/LXX verse mapping, including Hebrew/Greek Psalm numbering,
+  rather than calculating offsets. LXX-only verses have no canonical position
+  and are never shown as the counterpart of a different MT verse.
+- Added per-book SHA-256 verification of the Brenton USFM, Git-blob
+  verification of the LXX sources, and a build-time check that fails on
+  partial downloads.
+- Distinct messages for New Testament references, unparseable references, no
+  matching verses, and a missing comparison table.
+
+---
+
 ## Theology Source Links
 
 - **Owen entries link to his text.** All 45 Owen entries now carry a

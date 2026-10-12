@@ -29,6 +29,8 @@ import json
 
 from mcp.types import Tool, ToolAnnotations
 
+from .parsers.biblical_versions import VERSE_MAPPING_CREDIT
+
 
 def _parse_json_field(value, default=None):
     """Parse a JSON string field, returning default if parsing fails or value is already the right type."""
@@ -123,6 +125,57 @@ form, is needed.""",
             },
             "required": ["reference"]
         }
+    ),
+    Tool(
+        name="compare_biblical_versions",
+        annotations=ToolAnnotations(
+            title="Compare Biblical Versions",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+        ),
+        description="""Compare the Masoretic Text (MT) and Septuagint (LXX) side by side for an Old Testament or Septuagint verse, range, or chapter. Not for the New Testament. Returns at most ten verses per call and names the verse to continue from.
+
+Rows are grouped by canonical MT/English reference and keep each edition's own reference, so Hebrew/Greek versification differences stay explicit (Psalm 82:6 = Greek Psa.81.6). MT: Westminster Leningrad Codex with STEPBible word glosses (not a translation). LXX: Rahlfs, with Brenton's English only where Brenton translated the same recension. Brenton translated his own Greek, not Rahlfs: where it differs the row warns and shows his Greek, and his English should be quoted as a rendering of that text. LXX-only verses (e.g. the Prayer of Azariah) need numbering='lxx'. Sources, licences, and the TVTMS verse-mapping credit are listed once at the end.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "reference": {
+                    "type": "string",
+                    "description": (
+                        "Verse, range (also across chapters), or chapter; at most 10 verses "
+                        "are returned. E.g. 'Psalm 24:1', 'Genesis 1:1-3', 'Psalm 81:6-82:1'"
+                    ),
+                },
+                "versions": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["MT", "LXX"]},
+                    "default": ["MT", "LXX"],
+                    "description": "Editions to return, in display order. Default: MT and LXX",
+                },
+                "numbering": {
+                    "type": "string",
+                    "enum": ["canonical", "lxx"],
+                    "default": "canonical",
+                    "description": (
+                        "Read the reference in canonical MT/English numbering (default) or in "
+                        "the Greek edition's numbering ('lxx', e.g. Psalm 81:6 = MT Psalm 82:6). "
+                        "Books without an MT always use Greek numbering."
+                    ),
+                },
+                "include_original": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include Hebrew/Greek text. Default: true",
+                },
+                "include_morphology": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include word-level morphology. Default: false",
+                },
+            },
+            "required": ["reference"],
+        },
     ),
     Tool(
         name="search_lexicon",
@@ -1101,6 +1154,98 @@ def format_verse(verse: dict, include_original: bool = True, include_morphology:
         lines.append("")
     
     return "\n".join(lines)
+
+
+_SHORT_ENGLISH_LABELS = {"MT": "word glosses", "LXX": "Brenton"}
+
+
+def format_biblical_version_comparison(
+    reference: str,
+    rows: list[dict],
+    include_original: bool = True,
+    include_morphology: bool = False,
+    numbering: str = "canonical",
+    note: str = "",
+) -> str:
+    """Format edition rows compactly, with provenance listed once at the end.
+
+    Rows sharing a canonical (MT/English) reference are grouped under one
+    header; LXX-only rows (no canonical reference) are grouped by their
+    edition reference. Each row names its version, edition, and edition
+    reference; licence, source, translation label, verse-mapping credit, and
+    the Brenton caveat appear once in a closing Sources block.
+    """
+    title = f"## Biblical Version Comparison: {reference}"
+    if numbering == "lxx":
+        title += " (Septuagint edition numbering)"
+    lines = [title, ""]
+    if note:
+        lines.extend([f"*{note}*", ""])
+    current_group: str | None = None
+    sources: dict[tuple[str, str], dict] = {}
+    brenton_note = ""
+    brenton_greek_url = ""
+    for row in rows:
+        canonical = row.get("canonical_reference")
+        group = canonical or f"{row['edition_reference']} (LXX-only, no MT counterpart)"
+        if group != current_group:
+            current_group = group
+            lines.extend([f"### {group}", ""])
+        sources.setdefault((row["version"], row["edition"]), row)
+
+        header = f"#### {row['version']} {row['edition']} · {row['edition_reference']}"
+        if row.get("mapping_method") and row["mapping_method"] != "identity":
+            header += f" (mapping: {row['mapping_method']})"
+        lines.append(header)
+        if include_original:
+            lines.append(f"**{row['language']}:** {row['text']}")
+        if row.get("brenton_greek_differs"):
+            lines.append(
+                "> **Warning: Brenton's English below translates a different Greek text.** "
+                f"His own Greek differs from the Rahlfs text here: {row['brenton_greek_difference']}"
+            )
+            brenton_greek_url = row.get("brenton_greek_source_url") or brenton_greek_url
+            if include_original:
+                lines.append(
+                    f"**Brenton's Greek (the text his English translates):** {row['brenton_greek']}"
+                )
+        label = _SHORT_ENGLISH_LABELS.get(row["version"]) or row.get("translation_label") or "English"
+        if row.get("translation"):
+            lines.append(f"**English ({label}):** {row['translation']}")
+        else:
+            lines.append("**English:** not available for this edition.")
+        if row.get("translation_note"):
+            brenton_note = row["translation_note"]
+            if "brenton_greek_differs" in row and row["brenton_greek_differs"] is None:
+                lines.append("*Brenton's Greek for this verse is unavailable, so it was not compared.*")
+
+        if include_morphology:
+            words = _parse_json_field(row.get("morphology"), [])
+            if words:
+                lines.append("**Morphology:**")
+                for word in words:
+                    surface = word.get("surface") or word.get("word") or ""
+                    identifier = word.get("lemma") or word.get("strongs") or ""
+                    parsing = word.get("parsing") or word.get("morph") or ""
+                    pos = word.get("pos") or ""
+                    details = "; ".join(part for part in (identifier, pos, parsing) if part)
+                    gloss = f" — {word['gloss']}" if word.get("gloss") else ""
+                    lines.append(f"- **{surface}**{f' ({details})' if details else ''}{gloss}")
+        lines.append("")
+
+    lines.extend(["---", "**Sources**"])
+    for (version, edition), row in sources.items():
+        english = row.get("translation_label") or "none"
+        lines.append(
+            f"- {version} {edition} ({row['language']}): {row['license']}. "
+            f"English: {english}. {row['source_url']}"
+        )
+    if brenton_greek_url:
+        lines.append(f"- Brenton's Greek: public domain. {brenton_greek_url}")
+    lines.append(f"- Verse mapping: {VERSE_MAPPING_CREDIT}")
+    if brenton_note:
+        lines.append(f"\n*Brenton's English: {brenton_note}*")
+    return "\n".join(lines).rstrip()
 
 
 def format_name_entry(entry: dict, acai_data: dict | None = None) -> str:
