@@ -145,6 +145,14 @@ MT text is the Westminster Leningrad Codex from STEPBible TAHOT; its English is
 STEPBible word glosses (interlinear, not a translation). LXX text is Rahlfs
 (1935) with Brenton's English where Brenton translates the same recension
 (Theodotion for Daniel, Susanna and Bel; Vaticanus B for Joshua and Judges).
+Brenton (1844) translated his own Greek edition (chiefly Codex Vaticanus), not
+Rahlfs, so every row with his English carries a note that it may not match the
+Greek beside it. Where Brenton's own Greek differs from Rahlfs (added, missing,
+substituted or reordered words, after spelling differences are ignored), the
+row is flagged with a warning, a difference summary, and Brenton's Greek, which
+is the text his English translates. Quote Brenton's English as a rendering of
+that Greek, not of the Rahlfs text. Unflagged rows can still differ where
+Brenton's English departs from his own Greek.
 LXX-only verses with no MT counterpart (e.g. the Prayer of Azariah) have no
 canonical position: request them with numbering='lxx'.
 
@@ -1213,11 +1221,28 @@ def format_biblical_version_comparison(
 
         if include_original:
             lines.extend([f"**{row['language']} text:** {row['text']}", ""])
+        if row.get("brenton_greek_differs"):
+            lines.extend([
+                "> **Warning: Brenton's English below translates a different Greek text.** "
+                f"His own Greek differs from the Rahlfs text here: {row['brenton_greek_difference']}",
+                "",
+            ])
+            if include_original:
+                lines.extend([
+                    "**Brenton's Greek (the text his English translates; "
+                    f"{row['brenton_greek_source_url']}):** {row['brenton_greek']}",
+                    "",
+                ])
         label = row.get("translation_label") or "English translation"
         if row.get("translation"):
             lines.extend([f"**English ({label}):** {row['translation']}", ""])
         else:
             lines.extend([f"**English ({label}):** Not available for this edition.", ""])
+        if row.get("translation_note"):
+            note_text = row["translation_note"]
+            if "brenton_greek_differs" in row and row["brenton_greek_differs"] is None:
+                note_text += " Brenton's Greek for this verse is unavailable, so it was not compared."
+            lines.extend([f"*Note: {note_text}*", ""])
 
         if include_morphology:
             words = _parse_json_field(row.get("morphology"), [])

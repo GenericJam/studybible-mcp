@@ -192,6 +192,24 @@ versification mapping whenever it is not `identity`.
   shown only for the recension Brenton translated (Theodotion for Daniel, Susanna
   and Bel; Vaticanus B for Joshua and Judges); Old Greek and Alexandrinus rows say
   the translation is not available for that edition.
+- **Brenton's English is not a translation of the Rahlfs text.** Brenton (1844)
+  translated his own Greek edition, based chiefly on Codex Vaticanus, and his
+  English sometimes departs even from that Greek. Every row with his English
+  carries a note saying so. Each such verse is also compared with
+  [Brenton's own Greek](https://ebible.org/details.php?id=grcbrent) after
+  spelling noise is removed: accents, breathings, case, punctuation, elision,
+  movable nu, itacism (ει/ι), doubled consonants, nasal assimilation, crasis,
+  Hellenistic spellings (λήμψομαι/λήψομαι), word division (ἀνὰ μέσον/ἀναμέσον),
+  name spellings, and one-letter keying errors in Brenton's digital text. Where
+  his Greek still adds, lacks, substitutes, or reorders words, the row shows a
+  warning, a difference summary, and Brenton's Greek as the text his English
+  translates. Deuteronomy 32:43, for example, reports "word order differs (υἱοὶ
+  ἄγγελοι)", and Psalm 40:6 reports "Brenton's Greek reads σῶμα for ὠτία".
+  Differing verse divisions do not count as differences. About 38% of the
+  28,314 rows with Brenton's English are flagged. Unflagged rows (Sirach 17:17,
+  where the English adds words his Greek lacks) can still differ, because a
+  Greek-to-Greek comparison cannot see where his English departs from his own
+  Greek.
 - **LXX-only verses** (pluses such as the Prayer of Azariah, Psalm 151, and the
   Septuagint-only books) have no canonical MT position, so they never appear as
   the counterpart of a different MT verse. Request them with `numbering="lxx"`; a
@@ -876,13 +894,16 @@ indexes, with word morphology zlib-compressed); MT rows are read from the
 existing TAHOT `verses` table at query time.
 
 English LXX translations come from the public-domain
-[Brenton Septuagint at eBible.org](https://ebible.org/details.php?id=eng-Brenton).
-eBible regenerates its unversioned zip, so the download script verifies the
-SHA-256 of every extracted USFM book rather than of the archive, and never
-deletes or overwrites local files that fail verification. `build_database.py`
-stops with an error if `data/lxx` is present but incomplete (any of the 59
-morphology books, the mapping, a required Brenton book, or a manifest-listed
-file is missing or truncated).
+[Brenton Septuagint at eBible.org](https://ebible.org/details.php?id=eng-Brenton),
+and Brenton's own public-domain Greek text from
+[eBible's grcbrent](https://ebible.org/details.php?id=grcbrent)
+(`data/lxx/brenton-greek`). eBible regenerates its unversioned zips, so the
+download script verifies the SHA-256 of every extracted USFM book rather than of
+the archive, and never deletes or overwrites local files that fail verification.
+Brenton's Greek is stored only for the verses where it differs from Rahlfs
+(about 5 MB). `build_database.py` stops with an error if `data/lxx` is present
+but incomplete (any of the 59 morphology books, the mapping, a required Brenton
+English or Greek book, or a manifest-listed file is missing or truncated).
 
 ### BDB Hebrew Lexicon
 
@@ -996,7 +1017,7 @@ Contributions welcome! Especially:
 MIT License. See [LICENSE](LICENSE).
 
 Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-OpenScriptorium LXX morphology and MT/LXX verse mappings are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton English translation are public domain.
+OpenScriptorium LXX morphology and MT/LXX verse mappings are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -1008,7 +1029,7 @@ The theology and ANE entries are original summary prose written for this project
 
 - [STEPBible](https://www.stepbible.org/) for the freely available biblical data
 - [OpenScriptorium](https://github.com/OpenScriptorium/lxx-morph) for Rahlfs LXX morphology and explicit MT/LXX verse mappings
-- [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint
+- [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition

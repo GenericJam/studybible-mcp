@@ -16,6 +16,8 @@ import aiosqlite
 import logging
 
 from .parsers.biblical_versions import (
+    BRENTON_GREEK_SOURCE_URL,
+    BRENTON_TRANSLATION_NOTE,
     LXX_BOOK_CODES,
     LXX_LICENSE,
     LXX_SOURCE_URL,
@@ -181,7 +183,12 @@ def parse_passage_reference(
 
 
 def _lxx_row(row: dict) -> dict:
-    """Attach the constant LXX provenance to a stored biblical_version_verses row."""
+    """Attach the constant LXX provenance to a stored biblical_version_verses row.
+
+    Rows with Brenton's English get the standing translation note. Brenton's
+    own Greek (with its source) and the difference summary are kept only when
+    that Greek differs from the Rahlfs text (``brenton_greek_differs`` = 1).
+    """
     row.update(
         version="LXX",
         language="Greek",
@@ -193,6 +200,12 @@ def _lxx_row(row: dict) -> dict:
             row.pop("edition_chapter"), row.pop("edition_verse"), row.pop("edition_verse_suffix")
         ),
     )
+    if row["translation"]:
+        row["translation_note"] = BRENTON_TRANSLATION_NOTE
+    if row["brenton_greek_differs"]:
+        row["brenton_greek_source_url"] = BRENTON_GREEK_SOURCE_URL
+    else:
+        del row["brenton_greek"], row["brenton_greek_difference"]
     return row
 
 
@@ -1504,7 +1517,8 @@ class StudyBibleDB:
         lxx_columns = """edition, canonical_reference, canonical_book, canonical_chapter,
                          canonical_verse, canonical_verse_suffix, edition_reference,
                          edition_chapter, edition_verse, edition_verse_suffix,
-                         text, translation, morphology, mapping_method"""
+                         text, translation, morphology, mapping_method,
+                         brenton_greek_differs, brenton_greek, brenton_greek_difference"""
 
         if numbering == "lxx":
             lxx_rows = [
@@ -2161,6 +2175,13 @@ def create_schema(conn: sqlite3.Connection):
             translation TEXT,
             morphology BLOB,
             mapping_method TEXT NOT NULL,
+            -- Brenton's English translates his own Greek, not Rahlfs. NULL: no
+            -- Brenton English or Greek for the row; 0: his Greek agrees with
+            -- Rahlfs after orthographic levelling; 1: it differs, and only then
+            -- are his Greek and a difference summary stored.
+            brenton_greek_differs INTEGER,
+            brenton_greek TEXT,
+            brenton_greek_difference TEXT,
             UNIQUE(edition, edition_reference, canonical_reference)
         );
         CREATE INDEX IF NOT EXISTS idx_bvv_canonical

@@ -14,12 +14,16 @@ from study_bible_mcp import server
 from study_bible_mcp.database import StudyBibleDB, create_schema, parse_passage_reference
 from study_bible_mcp.parsers.biblical_versions import (
     BRENTON_BOOK_CODES,
+    BRENTON_TRANSLATION_NOTE,
     LXX_BOOK_CODES,
     LXX_SOURCE_BOOKS,
     REQUIRED_BRENTON_BOOKS,
+    REQUIRED_BRENTON_GREEK_BOOKS,
+    compare_brenton_greek,
     expand_lxx_morphology,
     import_biblical_versions,
     iter_lxx_rows,
+    normalize_greek_text,
     parse_brenton_usfm,
 )
 from study_bible_mcp.tools import format_biblical_version_comparison
@@ -40,7 +44,8 @@ LXX_ROW_FIELDS = (
     "edition", "canonical_reference", "canonical_book", "canonical_chapter",
     "canonical_verse", "canonical_verse_suffix", "edition_reference", "edition_book",
     "edition_chapter", "edition_verse", "edition_verse_suffix", "text", "translation",
-    "morphology", "mapping_method",
+    "morphology", "mapping_method", "brenton_greek_differs", "brenton_greek",
+    "brenton_greek_difference",
 )
 
 
@@ -66,11 +71,15 @@ def _unpaired(slug, grk_ref):
 LXX_FIXTURE = {
     "psalms-lxx": [
         ("Ps 8:6", "ἠλάττωσας αὐτὸν βραχύ τι παρ᾿ ἀγγέλους"),
-        ("Ps 39:7", "θυσίαν καὶ προσφορὰν οὐκ ἠθέλησας"),
+        ("Ps 39:7", "θυσίαν καὶ προσφορὰν οὐκ ἠθέλησας ὠτία δὲ κατηρτίσω μοι"),
         ("Ps 80:7", "ἀπέστησεν ἀπὸ ἄρσεων τὸν νῶτον αὐτοῦ"),
         ("Ps 81:1", "ψαλμὸς τῷ Ασαφ ὁ θεὸς ἔστη ἐν συναγωγῇ θεῶν"),
         ("Ps 81:6", "ἐγὼ εἶπα θεοί ἐστε καὶ υἱοὶ ὑψίστου πάντες"),
     ],
+    "deuteronomy": [(
+        "Deut 32:43",
+        "προσκυνησάτωσαν αὐτῷ πάντες υἱοὶ θεοῦ καὶ ἐνισχυσάτωσαν αὐτῷ πάντες ἄγγελοι θεοῦ",
+    )],
     "daniel": [
         ("Dan 3:25", "στὰς δὲ Αζαριας προσηύξατο"),
         ("Dan 3:92", "ἡ ὅρασις τοῦ τετάρτου ὁμοίωμα ἀγγέλου θεοῦ"),
@@ -87,18 +96,40 @@ PAIRS = [
     _pair("psalms-lxx", "80:7", "psalms", "81:6"),
     _pair("psalms-lxx", "81:1", "psalms", "82:1"),
     _pair("psalms-lxx", "81:6", "psalms", "82:6"),
+    _pair("deuteronomy", "32:43", "deuteronomy", "32:43", method="identity"),
     _unpaired("daniel", "3:25"),
     _pair("daniel", "3:92", "daniel", "3:25"),
     _unpaired("daniel-theodotion", "3:25"),
     _pair("daniel-theodotion", "3:92", "daniel", "3:25"),
 ]
 BRENTON_FIXTURE = {
-    "PSA": "\\c 81\n\\v 6 I said, Ye are gods; and all \\add of you\\add* children of the most High.\n",
+    "PSA": (
+        "\\c 39\n\\v 7 Sacrifice and offering thou wouldest not; but a body hast thou prepared me\n"
+        "\\c 81\n\\v 6 I said, Ye are gods; and all \\add of you\\add* children of the most High.\n"
+    ),
+    "DEU": (
+        "\\c 32\n\\v 43 and let all the angels of God worship him, "
+        "and let all the sons of God strengthen themselves in him\n"
+    ),
     "DAG": (
         "\\c 3\n\\v 25 Then Azarias stood up, and prayed on this manner;\n"
         "\\v 92 and the appearance of the fourth is like the Son of God.\n"
     ),
     "TOB": "\\c 1\n\\v 1 The book of the words of Tobit.\n",
+}
+# Brenton's own Greek: Psalm 81:6 and Daniel 3:92 differ from Rahlfs only in
+# spelling and punctuation; Psalm 39:7 and Deuteronomy 32:43 differ in text.
+# Tobit 1:1 and Daniel 3:25 have English but no Greek verse.
+BRENTON_GREEK_FIXTURE = {
+    "PSA": (
+        "\\c 39\n\\v 7 Θυσίαν καὶ προσφορὰν οὐκ ἠθέλησας, σῶμα δὲ κατηρτίσω μοι·\n"
+        "\\c 81\n\\v 6 Ἐγὼ εἶπα, θεοί ἐστε, καὶ υἱοὶ Ὑψίστου πάντες.\n"
+    ),
+    "DEU": (
+        "\\c 32\n\\v 43 προσκυνησάτωσαν αὐτῷ πάντες ἄγγελοι Θεοῦ, "
+        "καὶ ἐνισχυσάτωσαν αὐτῷ πάντες υἱοὶ Θεοῦ.\n"
+    ),
+    "DAG": "\\c 3\n\\v 92 Ἡ ὅρασις τοῦ τετάρτου ὁμοία υἱῷ Θεοῦ.\n",
 }
 MT_FIXTURE = [
     ("Psa.8.5(8.6)", "Psa", 8, 5, "and/ you have made lack/ him", "וַתְּחַסְּרֵהוּ"),
@@ -126,6 +157,12 @@ def _write_lxx_sources(data_dir: Path) -> Path:
     for code in REQUIRED_BRENTON_BOOKS:
         (brenton_dir / f"{code}eng-Brenton.usfm").write_text(
             f"\\id {code}\n{BRENTON_FIXTURE.get(code, '')}", encoding="utf-8"
+        )
+    greek_dir = lxx_dir / "brenton-greek"
+    greek_dir.mkdir()
+    for code in REQUIRED_BRENTON_GREEK_BOOKS:
+        (greek_dir / f"{code}grcbrent.usfm").write_text(
+            f"\\id {code} - Brenton Greek Text\n{BRENTON_GREEK_FIXTURE.get(code, '')}", encoding="utf-8"
         )
     return lxx_dir
 
@@ -174,7 +211,7 @@ def test_lxx_psalm_numbering_uses_explicit_mapping(tmp_path):
     pairings = {("psalms-lxx", "23:1"): [_pair("psalms-lxx", "23:1", "psalms", "24:1")]}
 
     row = dict(zip(LXX_ROW_FIELDS, next(iter_lxx_rows(
-        morphology_dir, pairings, {("PSA", "23:1"): "The earth is the Lord's."}
+        morphology_dir, pairings, {("PSA", "23:1"): "The earth is the Lord's."}, {}
     ))))
 
     assert row["canonical_reference"] == "Psa.24.1"
@@ -217,7 +254,7 @@ def test_brenton_is_attached_only_to_its_own_recension(tmp_path):
         pairings.setdefault((pair["grk_book"], pair["grk_ref"]), []).append(pair)
 
     rows = [dict(zip(LXX_ROW_FIELDS, row)) for row in iter_lxx_rows(
-        morphology_dir, pairings, {("DAG", "3:92"): "like the Son of God."}
+        morphology_dir, pairings, {("DAG", "3:92"): "like the Son of God."}, {}
     )]
     by_edition = {(row["edition"], row["edition_reference"]): row for row in rows}
 
@@ -240,7 +277,7 @@ def test_unpaired_lxx_verses_get_no_canonical_position(tmp_path):
     )
 
     row = dict(zip(LXX_ROW_FIELDS, next(iter_lxx_rows(
-        morphology_dir, {("daniel", "3:25"): [_unpaired("daniel", "3:25")]}, {}
+        morphology_dir, {("daniel", "3:25"): [_unpaired("daniel", "3:25")]}, {}, {}
     ))))
 
     assert row["canonical_reference"] is None
@@ -259,8 +296,8 @@ async def test_import_stores_only_lxx_rows_and_is_idempotent(tmp_path):
     finally:
         conn.close()
 
-    assert first == second == (6, 10)
-    assert stored == 10
+    assert first == second == (6, 11)
+    assert stored == 11
 
 
 @pytest.mark.parametrize(("reference", "mt_edition", "lxx_edition"), [
@@ -399,14 +436,165 @@ async def test_handler_suggests_upgrade_when_table_is_empty(tmp_path, monkeypatc
     assert "download" not in response[0].text
 
 
-def test_partial_lxx_download_fails_loudly(tmp_path):
+@pytest.mark.parametrize("missing", ["morphology/sirach.json", "brenton-greek/DEUgrcbrent.usfm"])
+def test_partial_lxx_download_fails_loudly(tmp_path, missing):
     lxx_dir = _write_lxx_sources(tmp_path / "data")
-    (lxx_dir / "morphology" / "sirach.json").unlink()
+    (lxx_dir / missing).unlink()
     conn = sqlite3.connect(":memory:")
     create_schema(conn)
 
-    with pytest.raises(FileNotFoundError, match="morphology/sirach.json"):
+    expected = "brenton-greek/\\*DEU\\*.usfm" if missing.startswith("brenton-greek") else missing
+    with pytest.raises(FileNotFoundError, match=expected):
         import_biblical_versions(conn, tmp_path / "data")
+
+
+def _brenton_difference(rahlfs: str, brenton: str, rahlfs_words=frozenset()):
+    return compare_brenton_greek(("", rahlfs, ""), ("", brenton, ""), frozenset(rahlfs_words))
+
+
+@pytest.mark.parametrize(("rahlfs", "brenton"), [
+    ("καὶ ἐλάλησεν κύριος πρὸς Μωυσῆν", "Καὶ ἐλάλησε Κύριος πρὸς Μωυσῆν,"),  # movable nu, case
+    ("ἐπ᾿ αὐτούς ἀπ᾿ ἐμοῦ", "ἐπʼ αὐτοὺς, ἀπὸ ἐμοῦ·"),  # elision marks, elided vs full
+    ("τοῦτό ἐστιν πᾶσιν", "τοῦτʼ ἐστὶ πᾶσι."),  # elided pronoun, movable nu
+    ("λήμψεται οὕτως Ιωακιμ", "λήψεται οὕτω Ἰωακείμ"),  # Hellenistic μψ, movable ς, itacism
+    ("κἀγὼ συνπορεύσομαι ἐξ αὐτῶν", "καὶ ἐγὼ συμπορεύσομαι ἐκ αὐτῶν"),  # crasis, assimilation
+    ("ἀνὰ μέσον ἐπὶ τὸ αὐτό", "ἀναμέσον ἐπιτοαυτό"),  # word division
+    ("εἶπαν ἐξολεθρεῦσαι γενήματα", "εἶπον ἐξολοθρεῦσαι γεννήματα"),  # aorist ending, spelling
+    ("ἐν Βαιθλεεμ τῷ Βοος", "ἐν Βηθλεὲμ τῷ Βοόζ"),  # proper names
+    ("ΑΛΕΦ. πῶς ἐκάθισεν μόνη", "ΑΛΕΦ. Πῶς ἐκάθισε μόνη"),  # acrostic heading on both sides
+    ("πῶς ἐκάθισεν μόνη", "ΑΛΕΦ. Πῶς ἐκάθισε μόνη"),  # Brenton's acrostic heading
+    ("οἱ υἱοὶ αὐτοῦ", "οἱ γἱοὶ αὐτοῦ"),  # keyed γ for υ
+])
+def test_orthographic_variants_do_not_flag(rahlfs, brenton):
+    assert _brenton_difference(rahlfs, brenton) is None
+
+
+def test_normalization_keeps_real_word_differences():
+    assert normalize_greek_text("ἓξ ἡμέρας") != normalize_greek_text("ἐκ ἡμέρας")
+    assert normalize_greek_text("ὑμῶν") != normalize_greek_text("ἡμῶν")
+    assert normalize_greek_text("Καὶ ἐλάλησε") == normalize_greek_text("καὶ ἐλάλησεν")
+
+
+def test_reordered_words_are_reported_as_word_order():
+    brenton = "προσκυνησάτωσαν αὐτῷ πάντες ἄγγελοι Θεοῦ, καὶ ἐνισχυσάτωσαν αὐτῷ πάντες υἱοὶ Θεοῦ."
+
+    brenton_text, summary = _brenton_difference(
+        "προσκυνησάτωσαν αὐτῷ πάντες υἱοὶ θεοῦ καὶ ἐνισχυσάτωσαν αὐτῷ πάντες ἄγγελοι θεοῦ", brenton
+    )
+
+    assert summary == "word order differs (υἱοὶ ἄγγελοι)"
+    assert brenton_text == brenton
+
+
+@pytest.mark.parametrize(("rahlfs", "brenton", "summary"), [
+    ("ὠτία δὲ κατηρτίσω μοι", "σῶμα δὲ κατηρτίσω μοι", "Brenton's Greek reads σῶμα for ὠτία"),
+    ("καὶ εἶπεν αὐτῷ", "καὶ εἶπεν αὐτῷ Κύριος,", "Brenton's Greek adds: Κύριος"),
+    ("καὶ εἶπεν αὐτῷ κύριος", "καὶ εἶπεν αὐτῷ.", "Brenton's Greek lacks: κύριος"),
+    ("ἐν τῷ οἴκῳ ὑμῶν", "ἐν τῷ οἴκῳ ἡμῶν", "Brenton's Greek reads ἡμῶν for ὑμῶν"),
+])
+def test_substitutions_additions_and_omissions_are_summarized(rahlfs, brenton, summary):
+    assert _brenton_difference(rahlfs, brenton, normalize_greek_text("ὑμῶν ἡμῶν")) == (brenton, summary)
+
+
+def test_keying_error_is_ignored_only_when_unknown_to_rahlfs():
+    rahlfs, brenton = "τοῦ σπέρματός σου", "τοῦ σηέρματός σου"
+
+    assert _brenton_difference(rahlfs, brenton, normalize_greek_text(rahlfs)) is None
+    assert _brenton_difference(rahlfs, brenton, normalize_greek_text(f"{rahlfs} σηέρματος")) == (
+        brenton, "Brenton's Greek reads σηέρματός for σπέρματός"
+    )
+
+
+def test_verse_division_differences_do_not_flag():
+    rahlfs_2, rahlfs_3 = "ἕνδεκα ἡμερῶν ἐν Χωρηβ ὁδὸς ἐπ᾿ ὄρος Σηιρ ἕως Καδης Βαρνη", "καὶ ἐγενήθη ἐν τῷ ἔτει"
+    # Brenton's Greek moves "Σηεὶρ ἕως Κάδης Βαρνή" into the next verse.
+    brenton_2, brenton_3 = "Ἕνδεκα ἡμερῶν ἐν Χωρὴβ ὁδὸς ἐπʼ ὄρος", "Σηεὶρ ἕως Κάδης Βαρνή. Καὶ ἐγενήθη ἐν τῷ ἔτει"
+
+    assert compare_brenton_greek(("", rahlfs_2, rahlfs_3), ("", brenton_2, brenton_3)) is None
+    assert compare_brenton_greek((rahlfs_2, rahlfs_3, ""), (brenton_2, brenton_3, "")) is None
+    # A real difference is still reported, with Brenton's Greek aligned to the Rahlfs verse.
+    changed_2 = "Ἕνδεκα ἡμερῶν ἐκ Χωρὴβ ὁδὸς ἐπʼ ὄρος"
+    assert compare_brenton_greek(("", rahlfs_2, rahlfs_3), ("", changed_2, brenton_3)) == (
+        "Ἕνδεκα ἡμερῶν ἐκ Χωρὴβ ὁδὸς ἐπʼ ὄρος Σηεὶρ ἕως Κάδης Βαρνή.",
+        "Brenton's Greek reads ἐκ for ἐν",
+    )
+
+
+async def test_flagged_row_shows_warning_and_brentons_greek(tmp_path):
+    db_path = _build_db(tmp_path)
+
+    result = await _compare(db_path, "Deuteronomy 32:43", ["LXX"])
+    row = result["rows"][0]
+    output = format_biblical_version_comparison("Deuteronomy 32:43", result["rows"])
+
+    assert row["brenton_greek_differs"] == 1
+    assert row["brenton_greek_difference"] == "word order differs (υἱοὶ ἄγγελοι)"
+    assert row["brenton_greek"].index("ἄγγελοι") < row["brenton_greek"].index("υἱοὶ")
+    assert "**Warning: Brenton's English below translates a different Greek text.**" in output
+    assert "word order differs (υἱοὶ ἄγγελοι)" in output
+    assert (
+        "**Brenton's Greek (the text his English translates; https://ebible.org/details.php?id=grcbrent):** "
+        "προσκυνησάτωσαν αὐτῷ πάντες ἄγγελοι Θεοῦ" in output
+    )
+    assert f"*Note: {BRENTON_TRANSLATION_NOTE}*" in output
+    assert output.index("Warning") < output.index("**English") < output.index("*Note:")
+    without_greek = format_biblical_version_comparison(
+        "Deuteronomy 32:43", result["rows"], include_original=False
+    )
+    assert "Warning" in without_greek and "Brenton's Greek (the text" not in without_greek
+
+
+async def test_psalm_40_6_flags_body_for_ears(tmp_path):
+    result = await _compare(_build_db(tmp_path), "Psalm 40:6", ["LXX"])
+
+    assert result["rows"][0]["brenton_greek_difference"] == "Brenton's Greek reads σῶμα for ὠτία"
+
+
+async def test_matching_greek_shows_only_the_standing_note(tmp_path):
+    db_path = _build_db(tmp_path)
+
+    result = await _compare(db_path, "Psalm 82:6", ["LXX"])
+    row = result["rows"][0]
+    output = format_biblical_version_comparison("Psalm 82:6", result["rows"])
+
+    assert row["brenton_greek_differs"] == 0
+    assert "brenton_greek" not in row and "brenton_greek_difference" not in row
+    assert "Warning" not in output and "Brenton's Greek (the text" not in output
+    assert f"*Note: {BRENTON_TRANSLATION_NOTE}*" in output
+
+
+async def test_rows_without_brenton_english_are_unchanged(tmp_path):
+    result = await _compare(_build_db(tmp_path), "Daniel 3:25", ["LXX"])
+    old_greek, theodotion = result["rows"]
+
+    assert old_greek["translation"] is None and old_greek["brenton_greek_differs"] is None
+    assert "translation_note" not in old_greek
+    output = format_biblical_version_comparison("Daniel 3:25", [old_greek])
+    assert "Note:" not in output and "Warning" not in output
+    assert theodotion["brenton_greek_differs"] == 0
+
+
+async def test_english_without_brenton_greek_says_it_was_not_compared(tmp_path):
+    result = await _compare(_build_db(tmp_path), "Tobit 1:1")
+    output = format_biblical_version_comparison("Tobit 1:1", result["rows"], numbering="lxx")
+
+    assert result["rows"][0]["brenton_greek_differs"] is None
+    assert "Brenton's Greek for this verse is unavailable, so it was not compared." in output
+    assert "Warning" not in output
+
+
+def test_import_adds_comparison_columns_to_an_existing_table(tmp_path):
+    _write_lxx_sources(tmp_path / "data")
+    conn = sqlite3.connect(":memory:")
+    create_schema(conn)
+    for column in ("brenton_greek_differs", "brenton_greek", "brenton_greek_difference"):
+        conn.execute(f"ALTER TABLE biblical_version_verses DROP COLUMN {column}")
+
+    import_biblical_versions(conn, tmp_path / "data")
+
+    assert conn.execute(
+        "SELECT brenton_greek_differs FROM biblical_version_verses WHERE edition_reference = 'Deu.32.43'"
+    ).fetchone() == (1,)
 
 
 def test_parse_passage_reference_bounds():
@@ -511,6 +699,23 @@ def test_brenton_mismatch_keeps_user_files(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="left in place"):
         module._download_brenton(_zip_client({}), tmp_path, force=False)
     assert local.read_bytes() == b"locally edited"
+
+
+def test_brenton_greek_download_is_pinned_per_book(tmp_path, monkeypatch):
+    module = _load_download_script()
+    good = "\\id DEU - Brenton Greek Text\n\\c 32\n\\v 43 Εὐφράνθητε οὐρανοὶ\n".encode()
+    name = "06-DEUgrcbrent.usfm"
+    monkeypatch.setattr(module, "BRENTON_GREEK_USFM_SHA256", {name: hashlib.sha256(good).hexdigest()})
+
+    with pytest.raises(RuntimeError, match="BRENTON_GREEK_USFM_SHA256"):
+        module._download_brenton_greek(_zip_client({name: b"changed"}), tmp_path, force=False)
+    assert not (tmp_path / "brenton-greek").exists()
+
+    manifest = module._download_brenton_greek(_zip_client({name: good}), tmp_path, force=False)
+
+    assert (tmp_path / "brenton-greek" / name).read_bytes() == good
+    assert manifest["source_url"] == "https://ebible.org/Scriptures/grcbrent_usfm.zip"
+    assert manifest["files"][name]["sha256"] == hashlib.sha256(good).hexdigest()
 
 
 def test_download_default_data_dir_is_project_relative():
