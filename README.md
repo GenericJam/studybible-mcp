@@ -236,13 +236,18 @@ Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. `targum`
 holds Targum Onkelos and Targum Pseudo-Jonathan on the five books of the Torah:
 11,684 Aramaic verse passages, with Etheridge's public-domain English for
 Pseudo-Jonathan and the CC BY-NC Metsudah English for most of Onkelos (see
-[Targums](#targums)), each linked to the verse it translates. Each result names
-its corpus, work, and citation, and shows up to 1,500 characters of English
-around the first match and a shorter original-language excerpt (match-centred
-when the query is in the original's script; a passage without openly licensed
-English shows its original instead); the edition, translation, license, and
-pinned source are listed once at the end. Up to 4 passages are returned by
-default.
+[Targums](#targums)), each linked to the verse it translates. `qumran`
+holds 44 Hebrew manuscript columns with numbered lines and no English (none is
+openly licensed): the Damascus Document (`CD 1:1–21`, Genizah MS A columns 1–16
+and MS B columns 19–20), the Community Rule (`1QS`), and the Rule of the
+Congregation (`1QSa`) from the ETCBC/dss transcription, and Pesher Habakkuk
+(`1QpHab`) from Hebrew Wikisource, whose 32 curated links name the Habakkuk
+verses each lemma quotes. Each result names its corpus, work, and citation, and
+shows up to 1,500 characters of English around the first match and a shorter
+original-language excerpt (match-centred when the query is in the original's
+script; a passage without openly licensed English shows its original instead);
+the edition, translation, license, and pinned source are listed once at the
+end. Up to 4 passages are returned by default.
 
 ```text
 search_ancient_sources(
@@ -286,7 +291,11 @@ For the targums, `Targum Onkelos`/`Onkelos`/`Tg. Onq.` or `Targum
 Pseudo-Jonathan`/`Pseudo-Jonathan`/`Tg. Ps.-J.` precedes a Torah book
 (`Genesis`/`Gen`, `Exodus`/`Exod`, `Leviticus`/`Lev`, `Numbers`/`Num`,
 `Deuteronomy`/`Deut`) and `chapter:verse`; a bare `Genesis 1:1` is ambiguous
-between the two targums.
+between the two targums. For Qumran: `CD`/`Damascus Document`/`Zadokite Fragments`, `1QS`/
+`Community Rule`, `1QSa`/`1Q28a`/`Rule of the Congregation`, and
+`1QpHab`/`Pesher Habakkuk` take `column:line`, with Arabic or Roman column
+numbers (`CD 6:11`, `CD VI 11`, `1QpHab VII 1-5`); each returns the whole
+column containing the line, with the line numbers in the text.
 
 ```text
 lookup_ancient_source(citation="Ant. 15.320")            # inside Antiquities 15.317–322
@@ -294,6 +303,8 @@ lookup_ancient_source(citation="Josephus, War 6.316")
 lookup_ancient_source(citation="Antiquities 18.116-121", include_original=False)
 lookup_ancient_source(citation="Tg. Ps.-J. Deut 32:8")
 lookup_ancient_source(citation="Onkelos Genesis 1:1-3")
+lookup_ancient_source(citation="CD 6:11")               # inside CD 6:1–21 (CD-A)
+lookup_ancient_source(citation="1QpHab 7:4")
 ```
 
 A locator inside a longer passage returns the passage containing it; a range
@@ -1118,6 +1129,53 @@ Period tags give the redaction era (editorial): `amoraic` for Onkelos,
 `amoraic,early_islamic` for Pseudo-Jonathan. The corpus adds about 24 MiB to a
 vacuumed database.
 
+### Qumran
+
+The `qumran` corpus has one passage per manuscript column, its Hebrew lines
+prefixed with their line numbers and cited `column:line`. No openly licensed
+English translation of these texts exists, so every passage is original-only
+and the tools say so.
+
+- **Damascus Document, Community Rule, Rule of the Congregation** (`CD`, `1QS`,
+  `1QSa`): the Text-Fabric transcription by Martin G. Abegg Jr., James E.
+  Bowley and Edward M. Cook in [ETCBC/dss](https://github.com/ETCBC/dss),
+  release 2.0.1, pinned to commit `47ecc1738fad6e67df7d40a3e84d73e4a125e265`
+  and licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
+  (checked in every feature file's header at download and import). CD keeps
+  the conventional page numbers: Genizah MS A columns 1–16 and MS B columns
+  19–20, shown as `CD-A`/`CD-B` alongside. Lines are rendered from the
+  sign-level features with the transcription's brackets: `[ ]` modern
+  reconstruction, `{ }` and `{{ }}` removal by a modern editor or the scribe,
+  `< >` and `<< >>` correction by a modern editor or the scribe, `^ ^`
+  supralinear, `( )` alternative reading, and `vacat` for an unwritten space.
+  A circlet above a letter (U+05AF) marks any of its four uncertainty
+  degrees, `◦` an unidentified sign, and `…` a missing sign; the morpheme
+  breaks Abegg inserts before suffixes are dropped, and the transcription's
+  `׃` marks are kept. Search folding ignores the circlets; a bracket inside a
+  word splits it for search. Other ETCBC scrolls are not imported (1QSb, for
+  example, mixes fragment labels and line gaps).
+- **Pesher Habakkuk** (`1QpHab`): Hebrew Wikisource, `מגילות מדבר יהודה/1QpHab
+  פשר חבקוק`, revision 2949117 (SHA-256 `2ee32f91…6b24`), licensed
+  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); only its
+  column-and-line section is imported, with the page's own restorations and
+  marks (the page does not name the source of its restorations). Wikisource
+  numbers column 1 from 1 to 14 but folds scroll line 7 into its line 6;
+  its lines 7–14 are renumbered 8–15, as verified against the ETCBC/dss
+  transcription of 1QpHab, which agrees with columns 2–13 as numbered.
+  Wikimedia requires a contact User-Agent, which the download sends.
+
+The 32 biblical links connect a 1QpHab column to each Habakkuk 1–2 verse
+(range) whose lemma it quotes, at the line where the quotation begins. Each
+was checked against the Masoretic verse, and the import verifies that the
+quoted words survive, outside the editor's brackets, on that line of the
+pinned text; two whose lemmas are mostly restored say so.
+
+R. H. Charles's public-domain English of the Damascus Document ("Fragments of
+a Zadokite Work", *APOT* II, 1913) is not used. It is available only as OCR,
+in Charles's own chapter:verse numbering with no Schechter page and line
+references, and his chapter IX prints MSS A and B in parallel columns that the
+OCR interleaves line by line, so it cannot be aligned reliably with CD lines.
+
 ### BDB Hebrew Lexicon
 
 The full unabridged Brown-Driver-Briggs Hebrew lexicon (8,090 entries) comes from [eliranwong/unabridged-BDB-Hebrew-lexicon](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon). The BDB is the standard scholarly Hebrew-English lexicon, originally published in 1906 and still widely used in academic study. Public domain text.
@@ -1233,6 +1291,7 @@ Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/li
 OpenScriptorium LXX morphology and MT/LXX verse mappings (derived in part from STEPBible's TVTMS) are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
 The Perseus Josephus Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 The targum Aramaic (Torat Emet) and Etheridge's English are public domain as declared by [Sefaria](https://www.sefaria.org/); the Metsudah Chumash English of Onkelos is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (non-commercial use only), and its licence is shown on every passage.
+The ETCBC/dss Dead Sea Scrolls transcription (Abegg, Bowley and Cook) is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/); the Hebrew Wikisource Pesher Habakkuk text is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -1248,6 +1307,7 @@ The theology and ANE entries are original summary prose written for this project
 - [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
 - [Perseus Digital Library](https://github.com/PerseusDL/canonical-greekLit) for the licensed Josephus Greek and English editions
 - [Sefaria](https://www.sefaria.org/) for the Torat Emet targum texts, Etheridge's targum translations, and the Metsudah Chumash English, via [Sefaria-Export-Archive](https://github.com/Sefaria/Sefaria-Export-Archive)
+- [ETCBC/dss](https://github.com/ETCBC/dss) and Martin G. Abegg Jr., James E. Bowley and Edward M. Cook for the Dead Sea Scrolls transcription, and [Hebrew Wikisource](https://he.wikisource.org/) for Pesher Habakkuk
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition

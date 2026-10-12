@@ -2,6 +2,30 @@
 
 ---
 
+## Qumran ancient source
+
+- Added the `qumran` corpus: 44 Hebrew manuscript columns, one passage per
+  column with numbered lines, cited `column:line` (`CD 6:11`, `CD VI 11`,
+  `1QS 3:13`, `1QSa 2:11`, `1QpHab 7:4`). The Damascus Document (Genizah MS A
+  columns 1–16, MS B columns 19–20, shown as `CD-A`/`CD-B`), the Community
+  Rule, and the Rule of the Congregation come from the ETCBC/dss
+  transcription of Abegg, Bowley and Cook (release 2.0.1, CC BY-NC 4.0);
+  Pesher Habakkuk comes from Hebrew Wikisource revision 2949117 (CC BY-SA
+  4.0), with its column 1 line numbers corrected to the scroll's.
+- Every passage is original-only: no openly licensed English translation
+  exists. Charles's 1913 English of the Damascus Document survives only as
+  OCR that cannot be aligned reliably with CD lines, so it is not used.
+- Added 32 curated links from Pesher Habakkuk to the Habakkuk 1–2 verses its
+  lemmas quote, each verified on import against the quoted line, so
+  `search_ancient_sources(query="צדיק", biblical_reference="Habakkuk 2:4", corpus="qumran")`
+  finds 1QpHab column 7. Search Qumran texts in Hebrew: they have no English,
+  and work titles are not searched.
+- Transcription brackets, vacats, and uncertain letters (a circlet that search
+  ignores) are kept; Abegg's morpheme breaks are removed so suffixed words
+  are searchable whole.
+
+---
+
 ## Targum ancient source
 
 - Added the `targum` corpus: Targum Onkelos and Targum Pseudo-Jonathan on all

@@ -36,8 +36,9 @@ This guide covers running your own instance of the Study Bible MCP server.
    The additional commands download the pinned 59-book Rahlfs morphology
    corpus, explicit MT/LXX versification mappings, public-domain Brenton English
    and Greek USFM, and every registered ancient-source corpus (currently the
-   licensed Josephus Greek/English corpus and the Onkelos/Pseudo-Jonathan
-   Aramaic/English targums) into `data/ancient_sources/<corpus>/`.
+   licensed Josephus Greek/English corpus, the Onkelos/Pseudo-Jonathan
+   Aramaic/English targums, and the Hebrew Qumran corpus) into
+   `data/ancient_sources/<corpus>/`.
    They validate source checksums before import; the build imports each
    downloaded corpus and fails on an incomplete one.
 5. **Build the database**

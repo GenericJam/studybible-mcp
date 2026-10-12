@@ -17,6 +17,7 @@ from .citations import CitationMatch, Resolution, resolve_citation
 _CORPUS_MODULES = (
     "josephus",
     "targum",
+    "qumran",
 )
 
 
