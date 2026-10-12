@@ -30,6 +30,7 @@ BAVA_BATRA = "Talmud/Bavli/Seder Nezikin/Bava Batra"
 VAYIKRA = "Midrash/Aggadah/Midrash Rabbah/Vayikra Rabbah"
 SHEKALIM_HEBREW = "באחד באדר משמיעין על השקלים"
 LONG = "Herod built the Temple with stones of white marble. " * 20  # ~1,000 characters
+MID = "Bava ben Buta gave counsel to Herod. " * 26  # ~960 characters
 
 
 def _version(title, license_, text, language="en"):
@@ -37,13 +38,21 @@ def _version(title, license_, text, language="en"):
 
 
 def _bava_batra_amudim(english=True):
-    """Amudim 1a-4a; 3b has ten long segments, 4a has six segments."""
-    amudim = [[], [], ["2a one"], ["2b one"], ["3a one"]]
-    amudim.append([f"<b>{LONG}</b> segment {n}" for n in range(1, 11)])
-    amudim.append([f"4a segment {n}: Herod’s building, white and green marble" for n in range(1, 7)])
-    if not english:
-        return [[f"ארמית {segment[-2:]}" if segment else segment for segment in amud] for amud in amudim]
-    return amudim
+    """Amudim 1a-4a. 3b has ten long segments; 4a has six short ones. 2b (eight
+    segments, 7,700 characters) and 3a (ten long segments) have one more
+    Aramaic segment than English."""
+    if english:
+        return [
+            [], [], ["2a one"], [f"{MID}{n}" for n in range(1, 9)],
+            [f"{LONG} 3a segment {n}" for n in range(1, 11)],
+            [f"<b>{LONG}</b> segment {n}" for n in range(1, 11)],
+            [f"4a segment {n}: Herod’s building, white and green marble" for n in range(1, 7)],
+        ]
+    return [
+        [], [], ["ארמית ne"], [f"ארמית ב {n}" for n in range(1, 10)],
+        [f"ארמית א {n}" for n in range(1, 12)], [f"ארמית {n}" for n in range(1, 11)],
+        [f"ארמית {n}" for n in range(1, 7)],
+    ]
 
 
 FILES = {
@@ -254,6 +263,18 @@ def test_parse_talmud_cuts_long_amudim_into_segment_ranges(fixture_dir):
     assert (whole["sort_start"], whole["sort_end"]) == (800, 899)
     assert whole["license"] == "CC BY-NC 4.0" and whole["original_language"] == "Aramaic"
     assert whole["author"] == "Babylonian Talmud" and whole["period_tags"] == "amoraic"
+
+
+def test_parse_talmud_marks_or_avoids_length_based_segment_pairing(fixture_dir):
+    rows = _rows(fixture_dir)
+    cut = [row for reference, row in rows.items() if reference.startswith("Bava Batra 3a:")]
+
+    kept_whole = rows["Bava Batra 2b"]
+    assert kept_whole["original_text"].count("ארמית") == 9 and len(kept_whole["text"]) > 7500
+    assert kept_whole["edition"] == "William Davidson Edition - Aramaic"
+    assert len(cut) == 2
+    assert all(rabbinic.LENGTH_PAIRED_NOTE in row["edition"] for row in cut)
+    assert rows["Bava Batra 3b:1–5"]["edition"] == "William Davidson Edition - Aramaic"
 
 
 def test_parse_leviticus_rabbah_pairs_wikisource_hebrew_with_sefaria_english(fixture_dir):

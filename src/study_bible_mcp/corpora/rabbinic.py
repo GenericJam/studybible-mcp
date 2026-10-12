@@ -209,8 +209,8 @@ _ALTERNATE_REFERENCES = {("tosefta_menachot", 13, 4): ZUCKERMANDEL_MENAHOT}
 # Gittin, Bava Batra, Sanhedrin, Makkot, Avodah Zarah and Tamid. Another
 # tractate is imported by adding B and pinning its two William Davidson files.
 # Titles follow Sefaria's spelling; aliases add SBL abbreviations (without
-# diacritics or apostrophes, which citation matching does not skip) and
-# common spellings, shortest first.
+# diacritics, which citation matching does not fold) and common spellings,
+# shortest first.
 _TRACTATES = (
     ("Berakhot", "Zeraim", "MTB", ("Ber.", "Berachot", "Brachot")),
     ("Peah", "Zeraim", "MT", ("Pea",)),
@@ -686,9 +686,10 @@ def _length(texts: list[str], indexes: tuple[int, ...]) -> int:
 def align_segments(english: list[str], original: list[str]) -> list[Bead]:
     """Pair English and Aramaic segments of one amud.
 
-    Equal counts pair by position. Otherwise (96 amudim of the edition differ
-    by a segment) a length-based dynamic programme groups 1-1, 1-2, 2-1, 1-0
-    and 0-1 segments, comparing each group's length ratio to the amud's.
+    Equal counts pair by position. Otherwise (96 amudim of the whole edition,
+    42 in the imported tractates, differ by a segment) a length-based dynamic
+    programme groups 1-1, 1-2, 2-1, 1-0 and 0-1 segments, comparing each
+    group's length ratio to the amud's.
     """
     if len(english) == len(original):
         return [((index,), (index,)) for index in range(len(english))]
@@ -748,6 +749,17 @@ def chunk_beads(beads: list[Bead], english: list[str], original: list[str],
     return chunks
 
 
+# Lookup shows 8,000 characters of each text (tools.format_ancient_source_lookup).
+DISPLAY_CHARACTER_LIMIT = 8000
+# Shown with the Aramaic edition of passages cut from an amud whose Aramaic and
+# English versions have different segment counts, where the Aramaic beside
+# each English range is chosen by comparing segment lengths.
+LENGTH_PAIRED_NOTE = (
+    "(Aramaic matched to this English segment range by length: the two versions "
+    "divide this amud into different numbers of segments)"
+)
+
+
 def _talmud_passages(directory: Path, source: _Source, pins: dict[str, str]) -> Iterator[dict]:
     """One passage per amud, or per segment range when the amud is long."""
     work = source.work
@@ -769,6 +781,15 @@ def _talmud_passages(directory: Path, source: _Source, pins: dict[str, str]) -> 
             continue
         beads = align_segments(english_segments, original_segments)
         chunks = chunk_beads(beads, english_segments, original_segments)
+        edition = aramaic
+        if len(chunks) > 1 and len(english_segments) != len(original_segments):
+            # Cutting needs the length-based pairing; avoid it where the whole
+            # amud still displays untruncated, and say so where it cannot.
+            if all(len("\n\n".join(filter(None, segments))) <= DISPLAY_CHARACTER_LIMIT
+                   for segments in (english_segments, original_segments)):
+                chunks = [beads]
+            else:
+                edition = {**aramaic, "versionTitle": f"{TALMUD_ARAMAIC} {LENGTH_PAIRED_NOTE}"}
         for number, chunk in enumerate(chunks):
             english_indexes = [i for bead in chunk for i in bead[0]]
             original_indexes = [j for bead in chunk for j in bead[1]]
@@ -789,8 +810,8 @@ def _talmud_passages(directory: Path, source: _Source, pins: dict[str, str]) -> 
                 work, _AUTHORS["B"], _PERIOD["B"], reference,
                 (work.locator.key(daf, side, first), work.locator.key(daf, side, last)),
                 (english, english_text) if english_text else None,
-                (aramaic, original_text) if original_text else None,
-                aramaic, TALMUD_LANGUAGE, _source_url(source.hebrew_dir),
+                (edition, original_text) if original_text else None,
+                edition, TALMUD_LANGUAGE, _source_url(source.hebrew_dir),
             )
 
 

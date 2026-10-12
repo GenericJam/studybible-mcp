@@ -267,6 +267,21 @@ def test_unknown_work_and_unreadable_locator():
     assert whiston.status == "bad_locator" and whiston.candidates[0].locator_text == "18.5.2"
 
 
+def test_apostrophes_in_transliterated_names_are_ignored():
+    corpus = _corpus("apostrophes", (
+        Work("bavli_taanit", "Taanit", "Taanit", DAF_AMUD),
+        Work("mishnah_meilah", "Me'ilah", "Me'ilah", CHAPTER_VERSE),
+    ))
+
+    for citation, expected in (
+        ("Ta'anit 2a", ("bavli_taanit", (4, 4))),
+        ("Ta’anit 2a", ("bavli_taanit", (4, 4))),
+        ("Meʼilah 1:1", ("mishnah_meilah", (1001, 1001))),
+        ("Meilah 1:1", ("mishnah_meilah", (1001, 1001))),
+    ):
+        assert _resolved(citation, [corpus])[1:] == expected, citation
+
+
 # --- Registry
 
 

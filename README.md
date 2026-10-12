@@ -250,10 +250,11 @@ R. H. Charles's English, one passage per Charles verse, and 4 Ezra (2 Esdras
 3–14) in the KJV with the Clementine Latin, one passage per verse (1,679
 passages); both works are non-canonical and are labelled as attributed to
 Enoch or Ezra. The
-`rabbinic` corpus holds 12,212 passages from Sefaria and Hebrew Wikisource:
+`rabbinic` corpus holds 12,210 passages from Sefaria and Hebrew Wikisource:
 the Mishnah (63 tractates, by mishnah), the Tosefta (61 tractates, Vilna
-numbering, by halakhah), 16 Babylonian Talmud tractates (by amud, long amudim
-cut into segment ranges such as `Bava Batra 3b:1–9`), and Leviticus Rabbah (by
+numbering, by halakhah), 16 of the 37 Babylonian Talmud tractates (the full
+Bavli is too large for the deployed database; by amud, long amudim cut into
+segment ranges such as `Bava Batra 3b:1–9`), and Leviticus Rabbah (by
 section). Each result names its corpus, work, and citation, and shows up to
 1,500 characters of English around the first match and a shorter
 original-language excerpt (match-centred when the query is in the original's
@@ -325,8 +326,8 @@ tractates take `daf+amud` with an optional Sefaria segment (`Bava Batra 3b-4a`,
 `Pes. 57a:8`, `b. Sanh. 43a`); `Leviticus Rabbah`/`Lev. Rab.`/`Vayikra Rabbah`
 takes `chapter:section`. Tractate names follow Sefaria (`Menachot`,
 `Pesachim`) with SBL abbreviations and common spellings as aliases (`Menahot`,
-`Men.`, `Pesah.`, `B. Bat.`); apostrophe forms such as `Ta'anit` are not
-matched, so use `Taanit`.
+`Men.`, `Pesah.`, `B. Bat.`); apostrophes are ignored, so `Ta'anit 2a` is
+`Taanit 2a`.
 
 ```text
 lookup_ancient_source(citation="Ant. 15.320")            # inside Antiquities 15.317–322
@@ -1315,13 +1316,17 @@ them to.
   both CC BY-NC 4.0. One passage per amud; an amud longer than 7,500
   characters is cut into Sefaria segment ranges (`Bava Batra 3b:1–9`,
   `3b:10–16`) so lookup shows each in full, and `Bava Batra 3b` returns all of
-  them. Where the Aramaic and English segment counts differ (96 amudim),
-  segments are paired by length before cutting. The whole Bavli would add
-  169 MB to the database, so 16 tractates (71 MB) are imported: Berakhot,
-  Shabbat, Pesachim, Yoma, Sukkah, Rosh Hashanah, Taanit, Megillah, Chagigah,
-  Sotah, Gittin, Bava Batra, Sanhedrin, Makkot, Avodah Zarah and Tamid. The
-  English transliterates בית בייתוס as "house of Baitos": search `Baitos` or
-  `בייתוס`, not `Boethus`, to find Pesachim 57a.
+  them. Where the Aramaic and English segment counts differ (42 amudim of the
+  imported tractates), segments are paired by length. Such an amud is kept
+  whole when it fits the 8,000-character display (2 amudim); the 18 that are
+  still cut (36 passages) say so in their Aramaic edition line ("Aramaic
+  matched to this English segment range by length"). **The Bavli covers 16 of
+  its 37 tractates**: the whole Bavli would add 169 MB to the database, so 16
+  tractates (71 MB) are imported: Berakhot, Shabbat, Pesachim, Yoma, Sukkah,
+  Rosh Hashanah, Taanit, Megillah, Chagigah, Sotah, Gittin, Bava Batra,
+  Sanhedrin, Makkot, Avodah Zarah and Tamid. **The William Davidson English
+  spells Boethus "Baitos"** (בית בייתוס, "the house of Baitos"): search
+  `Baitos` or `בייתוס`, not `Boethus`, to find Pesachim 57a.
 - **Leviticus Rabbah**, one passage per chapter:section: Hebrew from
   [Hebrew Wikisource](https://he.wikisource.org/wiki/ויקרא_רבה) (CC BY-SA 4.0)
   with *The Sefaria Midrash Rabbah, 2022* English (CC BY). Wikisource's

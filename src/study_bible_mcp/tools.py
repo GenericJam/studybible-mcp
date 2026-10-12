@@ -61,12 +61,35 @@ ANCIENT_LOOKUP_LIMIT = 10
 _ANCIENT_CORPORA = "\n".join(
     f"- `{corpus.key}`: {corpus.summary}" for corpus in CORPORA.values()
 )
+# A corpus's works are listed one by one, except that a collection (or the
+# corpus's uncollected works) with more than this many works is summarised by
+# count, citation grammar, and an example; their names stay resolvable.
+_LISTED_WORKS_PER_GROUP = 4
+
+
+def _work_groups(corpus) -> str:
+    groups: dict[str | None, list] = {}
+    for work in corpus.works:
+        groups.setdefault(work.collection.title if work.collection else None, []).append(work)
+    parts = []
+    for title, works in groups.items():
+        if len(works) <= _LISTED_WORKS_PER_GROUP:
+            parts.extend(
+                f"{work.display_title} ({', '.join((*work.aliases[:2], work.locator.name))})"
+                for work in works
+            )
+            continue
+        grammars = ", ".join(dict.fromkeys(work.locator.name for work in works))
+        example = works[0]
+        parts.append(
+            f"{title or corpus.label}: {len(works)} works by {grammars}, "
+            f"e.g. '{example.display_title} {example.locator.example}'"
+        )
+    return "; ".join(parts)
+
+
 _ANCIENT_WORKS = "\n".join(
-    f"- {corpus.label} (e.g. '{corpus.example_citation}'): "
-    + "; ".join(
-        f"{work.display_title} ({', '.join((*work.aliases[:2], work.locator.name))})"
-        for work in corpus.works
-    )
+    f"- {corpus.label} (e.g. '{corpus.example_citation}'): {_work_groups(corpus)}"
     for corpus in CORPORA.values()
 )
 _COLLECTIONS = sorted({
@@ -297,7 +320,8 @@ optional.{_ANCIENT_COLLECTION_NOTE} A locator inside a longer passage returns th
 passage that contains it; a range ('Ant. 18.116-119') returns every
 overlapping passage in order, at most {ANCIENT_LOOKUP_LIMIT}.
 
-Citable works:
+Citable works (a summarised group accepts each work's usual name and
+abbreviations):
 {_ANCIENT_WORKS}
 
 Each passage shows its corpus, work, citation, original-language edition,

@@ -12,6 +12,8 @@ from .base import Corpus, Work
 from .locators import SortRange
 
 _SKIP = re.compile(r"[\s.,]*")
+# Apostrophes inside transliterated names are ignored: "Ta'anit" = "Taanit".
+_APOSTROPHES = re.compile(r"['’ʼ]")
 
 
 @dataclass(frozen=True)
@@ -94,7 +96,7 @@ def resolve_citation(citation: str, corpora: Iterable[Corpus]) -> Resolution:
     longest name match wins; a tie between different works is ambiguous (a
     collection prefix such as 'Mishnah' or 'Bavli' breaks it).
     """
-    text = unicodedata.normalize("NFC", citation).strip()
+    text = _APOSTROPHES.sub("", unicodedata.normalize("NFC", citation)).strip()
     candidates = [match for corpus in corpora for match in _work_matches(corpus, text)]
     if not candidates:
         return Resolution("unknown_work")

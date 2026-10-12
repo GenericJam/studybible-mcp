@@ -4,7 +4,7 @@
 
 ## Rabbinic ancient source
 
-- Added the `rabbinic` corpus (12,212 passages): the Mishnah (63 tractates,
+- Added the `rabbinic` corpus (12,210 passages): the Mishnah (63 tractates,
   Vilna 1913 Hebrew with Kulp's *Mishnah Yomit* English), the Tosefta (61
   tractates, Vilna numbering, Machon Mamre Hebrew with Sefaria Community
   English for 2,133 halakhot and Hebrew only for the rest), 16 Babylonian
@@ -21,6 +21,15 @@
   (Zuckermandel) resolve to Vilna 13:4.
 - The whole Bavli would add 169 MB to the database; the 16 most-cited
   tractates add 71 MB (107 MB for the corpus).
+- Where the Aramaic and English divide an amud into different numbers of
+  segments, the amud is kept whole if it fits the 8,000-character display;
+  otherwise (18 amudim, 36 passages) each segment range's Aramaic edition line
+  says the Aramaic was matched to the English by length. The William Davidson
+  English spells Boethus "Baitos".
+- Citation names ignore apostrophes (`Ta'anit 2a` = `Taanit 2a`,
+  `Me'ilah`), and the `lookup_ancient_source` description summarises a
+  collection of more than four works by count, grammar, and example instead of
+  listing each one (1,503 characters with Josephus and the rabbinic corpus).
 - Six curated biblical links: Mishnah Shekalim 1:1 and 1:3 (Matthew
   17:24–27), Bava Batra 4a (John 2:20, Mark 13:1, Luke 21:5), Pesachim 57a
   (Acts 4:6).
