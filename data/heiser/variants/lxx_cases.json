@@ -1,0 +1,234 @@
+{
+  "variants": [
+    {
+      "reference": "Jer.33.14",
+      "mt_reading": "MT contains a 13-verse Davidic/Levitical restoration prophecy (33:14-26): \"Behold, days are coming, declares Yahweh, when I will fulfill the good word I have spoken concerning the house of Israel and concerning the house of Judah…\"",
+      "mt_hebrew": "הִנֵּ֛ה יָמִ֥ים בָּאִ֖ים נְאֻם\\־ יְהוָ֑ה וַ/הֲקִֽמֹתִי֙ אֶת\\־ הַ/דָּבָ֣ר הַ/טּ֔וֹב …",
+      "variant_source": "LXX_omission",
+      "variant_reading": "Entire passage Jer 33:14-26 is absent in LXX. LXX Jeremiah is reordered (MT Jer 33 ≈ LXX Jer 40) and LXX Jer 40 ends at verse 13 — the Davidic/Levitical restoration block is not present at all.",
+      "variant_original": null,
+      "variant_significance": "major_textual",
+      "heiser_analysis": null,
+      "scholarly_consensus": "LXX Jeremiah is ~1/8 shorter than MT Jeremiah throughout, and 4QJer^b/^d preserve a short-form Hebrew Vorlage matching the LXX elsewhere in Jeremiah. Scholarly consensus (Tov, Janzen, Stulman) is that the LXX preserves an earlier short edition of Jeremiah and the MT represents a later, expanded Hebrew edition. The expansion is pre-Christian — likely 3rd–2nd century BC — not the work of post-Christian rabbis.",
+      "preferred_for_hlt": "Follow MT longer reading in body text; footnote LXX omission.",
+      "hlt_rationale": "No NT writer quotes this passage so the apostolic-endorsement principle does not apply. The MT longer form is the only attested Hebrew tradition for these verses and is canonical in the Hebrew Bible. The LXX absence should be footnoted so the reader knows a parallel short Hebrew text-form existed pre-Christian (4QJer^b/^d confirm this for Jeremiah broadly).",
+      "witnesses": [
+        {
+          "manuscript": "LXX (Jer 40 ends at v.13)",
+          "manuscript_date": "~150 BCE",
+          "reading_support": "omits"
+        },
+        {
+          "manuscript": "4QJer^b (short Vorlage elsewhere in Jer)",
+          "manuscript_date": "~200 BCE",
+          "reading_support": "supports_short_form_pattern"
+        },
+        {
+          "manuscript": "4QJer^d (short Vorlage elsewhere in Jer)",
+          "manuscript_date": "~50 BCE",
+          "reading_support": "supports_short_form_pattern"
+        },
+        {
+          "manuscript": "Masoretic Text",
+          "manuscript_date": "~900 CE",
+          "reading_support": "supports_long_form"
+        }
+      ]
+    },
+    {
+      "reference": "Psa.40.6",
+      "mt_reading": "Sacrifice and offering you did not desire; ears you have dug for me; burnt offering and sin offering you did not require.",
+      "mt_hebrew": "זֶ֤בַח וּ/מִנְחָ֨ה לֹֽא\\־ חָפַ֗צְתָּ אָ֭זְנַיִם כָּרִ֣יתָ לִּ֑/י עוֹלָ֥ה וַ֝/חֲטָאָ֗ה לֹ֣א שָׁאָֽלְתָּ",
+      "variant_source": "LXX_quoted_in_NT",
+      "variant_reading": "Sacrifice and offering you did not desire, but a body you prepared for me; whole-burnt-offering and sin offering you did not require.",
+      "variant_original": "θυσίαν καὶ προσφορὰν οὐκ ἠθέλησας, σῶμα δὲ κατηρτίσω μοι· ὁλοκαύτωμα καὶ περὶ ἁμαρτίας οὐκ ᾔτησας.",
+      "variant_significance": "major_NT_quotation",
+      "heiser_analysis": null,
+      "scholarly_consensus": "No Qumran fragment preserves this verse, so the LXX/MT divergence cannot be directly arbitrated by DSS. The LXX \"body\" is widely viewed as either a synecdochic paraphrase of \"ears\" (the part for the whole — God prepared a body for the psalmist to serve him with) or a different Hebrew Vorlage. Either way pre-Christian (LXX Psalter c. 150 BC). Hebrews 10:5-7 quotes the LXX form verbatim and applies \"a body you have prepared for me\" to Christ's incarnation.",
+      "preferred_for_hlt": "Sacrifice and offering you did not desire, but a body you prepared for me; whole-burnt-offering and sin offering you did not require.",
+      "hlt_rationale": "Hebrews 10:5-7 quotes this verse in its LXX form and applies \"a body you prepared for me\" to the incarnation of Christ. The apostolic writer's use of the LXX reading validates it as the authoritative form for Christian Scripture. HLT follows the LXX form in the body text; the MT \"ears you dug for me\" is footnoted as the alternative Hebrew tradition.",
+      "witnesses": [
+        {
+          "manuscript": "LXX",
+          "manuscript_date": "~150 BCE",
+          "reading_support": "supports_variant"
+        },
+        {
+          "manuscript": "Masoretic Text",
+          "manuscript_date": "~900 CE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "DSS (none preserved)",
+          "manuscript_date": null,
+          "reading_support": "not_preserved"
+        },
+        {
+          "manuscript": "Hebrews 10:5-7",
+          "manuscript_date": "~65 CE",
+          "reading_support": "supports_variant"
+        }
+      ]
+    },
+    {
+      "reference": "Psa.8.2",
+      "mt_reading": "Out of the mouth of children and nursing infants you have established strength on account of your opposers, to put an end to enemy and avenger.",
+      "mt_hebrew": "מִ/פִּ֤י עֽוֹלְלִ֨ים וְֽ/יֹנְקִים֮ יִסַּ֪דְתָּ עֹ֥ז לְמַ֥עַן צוֹרְרֶ֑י/ךָ",
+      "variant_source": "LXX_quoted_in_NT",
+      "variant_reading": "Out of the mouth of infants and nursing children you have perfected praise, on account of your enemies, to put an end to enemy and avenger.",
+      "variant_original": "ἐκ στόματος νηπίων καὶ θηλαζόντων κατηρτίσω αἶνον ἕνεκα τῶν ἐχθρῶν σου, τοῦ καταλῦσαι ἐχθρὸν καὶ ἐκδικητήν.",
+      "variant_significance": "major_NT_quotation",
+      "heiser_analysis": null,
+      "scholarly_consensus": "No Qumran fragment preserves this verse. The LXX may reflect a different Hebrew Vorlage (perhaps reading תהלה \"praise\" instead of עז \"strength\") or an interpretive paraphrase. Either way pre-Christian. Jesus quotes the LXX form in Matt 21:16 when defending the children's acclamation in the temple.",
+      "preferred_for_hlt": "Out of the mouth of infants and nursing children you have perfected praise, on account of your enemies, to put an end to enemy and avenger.",
+      "hlt_rationale": "Jesus quotes this verse in its LXX form (Matt 21:16) to defend the children's acclamation of him as Son of David in the temple. The Lord's use of the LXX reading validates it as the authoritative form for Christian Scripture. HLT follows the LXX form (\"perfected praise\"); the MT \"established strength\" is footnoted as the alternative Hebrew tradition.",
+      "witnesses": [
+        {
+          "manuscript": "LXX",
+          "manuscript_date": "~150 BCE",
+          "reading_support": "supports_variant"
+        },
+        {
+          "manuscript": "Masoretic Text",
+          "manuscript_date": "~900 CE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "DSS (none preserved)",
+          "manuscript_date": null,
+          "reading_support": "not_preserved"
+        },
+        {
+          "manuscript": "Matthew 21:16 (Jesus)",
+          "manuscript_date": "~30 CE",
+          "reading_support": "supports_variant"
+        }
+      ]
+    },
+    {
+      "reference": "Isa.61.1",
+      "mt_reading": "…to proclaim liberty to captives, and to prisoners, opening.",
+      "mt_hebrew": "לִ/קְרֹ֤א לִ/שְׁבוּיִם֙ דְּר֔וֹר וְ/לַ/אֲסוּרִ֖ים פְּקַח\\־ קֽוֹחַ",
+      "variant_source": "LXX_quoted_in_NT",
+      "variant_reading": "…to proclaim release to captives and recovery of sight to the blind.",
+      "variant_original": "κηρῦξαι αἰχμαλώτοις ἄφεσιν καὶ τυφλοῖς ἀνάβλεψιν",
+      "variant_significance": "LXX_paraphrase_NT_quote",
+      "heiser_analysis": null,
+      "scholarly_consensus": "Four independent Qumran Isaiah scrolls (1QIsa^a, 1Q8, 4Q56, 4Q66) all read with the MT — \"to prisoners, opening\" — with no mention of the blind. The LXX paraphrased \"to bound ones, opening\" as \"to the blind, sight opening.\" The Hebrew is pre-Christian and the LXX rendering is an interpretive translation. Jesus quotes the LXX form in Luke 4:18 as part of his Nazareth synagogue reading.",
+      "preferred_for_hlt": "…to proclaim release to captives and recovery of sight to the blind.",
+      "hlt_rationale": "Jesus reads this verse aloud in the synagogue (Luke 4:18-19) and applies it to his own ministry, including the LXX clause \"recovery of sight to the blind.\" Although four Qumran Isaiah scrolls confirm that the underlying Hebrew text was the MT form (\"prisoners, opening\"), Christ's explicit quotation of the LXX form establishes it as the authoritative Christian reading. HLT follows the LXX form; the MT reading is footnoted with a note that 1QIsa^a (~125 BC) and three other Qumran witnesses confirm the Hebrew was the shorter form.",
+      "witnesses": [
+        {
+          "manuscript": "1QIsa^a",
+          "manuscript_date": "~125 BCE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "1Q8 (1QIsa^b)",
+          "manuscript_date": "~100 BCE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "4Q56 (4QIsa^b)",
+          "manuscript_date": "~50 BCE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "4Q66 (4QIsa^l)",
+          "manuscript_date": "~50 BCE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "LXX",
+          "manuscript_date": "~150 BCE",
+          "reading_support": "supports_variant"
+        },
+        {
+          "manuscript": "Masoretic Text",
+          "manuscript_date": "~900 CE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "Luke 4:18 (Jesus)",
+          "manuscript_date": "~30 CE",
+          "reading_support": "supports_variant"
+        }
+      ]
+    },
+    {
+      "reference": "Isa.40.5",
+      "mt_reading": "And the glory of Yahweh shall be revealed, and all flesh shall see together, for the mouth of Yahweh has spoken.",
+      "mt_hebrew": "וְ/נִגְלָ֖ה כְּב֣וֹד יְהוָ֑ה וְ/רָא֤וּ כָל\\־ בָּשָׂר֙ יַחְדָּ֔ו",
+      "variant_source": "LXX_quoted_in_NT",
+      "variant_reading": "And the glory of the Lord shall appear, and all flesh shall see the salvation of God, for the Lord has spoken.",
+      "variant_original": "καὶ ὀφθήσεται ἡ δόξα Κυρίου, καὶ ὄψεται πᾶσα σὰρξ τὸ σωτήριον τοῦ θεοῦ, ὅτι Κύριος ἐλάλησεν.",
+      "variant_significance": "LXX_expansion_NT_quote",
+      "heiser_analysis": null,
+      "scholarly_consensus": "1QIsa^a and 1Q8 both read with the MT — neither has \"the salvation of God.\" The LXX likely harmonised from Isa 52:10 (\"all the ends of the earth shall see the salvation of our God\"). Pre-Christian Hebrew tradition was the shorter form. Luke 3:6 quotes the LXX expansion when describing John the Baptist's ministry as the fulfilment of Isaiah 40.",
+      "preferred_for_hlt": "And the glory of the Lord shall appear, and all flesh shall see the salvation of God, for the Lord has spoken.",
+      "hlt_rationale": "Luke 3:6 cites this verse in its LXX form to anchor John the Baptist's ministry in Isaiah 40. Although 1QIsa^a and 1Q8 confirm that the Hebrew text was the shorter MT form, the Gospel writer's use of the LXX reading establishes it as the authoritative Christian reading. HLT follows the LXX form (\"see the salvation of God\"); the MT shorter reading is footnoted.",
+      "witnesses": [
+        {
+          "manuscript": "1QIsa^a",
+          "manuscript_date": "~125 BCE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "1Q8 (1QIsa^b)",
+          "manuscript_date": "~100 BCE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "LXX",
+          "manuscript_date": "~150 BCE",
+          "reading_support": "supports_variant"
+        },
+        {
+          "manuscript": "Masoretic Text",
+          "manuscript_date": "~900 CE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "Luke 3:6",
+          "manuscript_date": "~60 CE",
+          "reading_support": "supports_variant"
+        }
+      ]
+    },
+    {
+      "reference": "Amo.9.12",
+      "mt_reading": "…so that they may dispossess the remnant of Edom and all the nations who are called by my name…",
+      "mt_hebrew": "לְמַ֨עַן יִֽירְשׁ֜וּ אֶת\\־ שְׁאֵרִ֤ית אֱדוֹם֙",
+      "variant_source": "LXX_quoted_in_NT",
+      "variant_reading": "…so that the remnant of men, and all the Gentiles upon whom my name is called, may earnestly seek [the Lord]…",
+      "variant_original": "ὅπως ἐκζητήσωσιν οἱ κατάλοιποι τῶν ἀνθρώπων καὶ πάντα τὰ ἔθνη ἐφ᾽ οὓς ἐπικέκληται τὸ ὄνομά μου ἐπ᾽ αὐτούς",
+      "variant_significance": "major_NT_quotation",
+      "heiser_analysis": null,
+      "scholarly_consensus": "Two one-consonant Hebrew differences: אדם (man) vs אדום (Edom) — extra waw; and ידרשו (will seek) vs יירשו (will dispossess) — dalet/yod swap. Could be different Vorlage or different vocalisation of an unpointed text. The only Hebrew manuscript witness is Mur88 (2nd c. AD, post-Christian), which reads with the MT. James quotes the LXX form in Acts 15:17 at the Jerusalem council, citing it as scriptural warrant for the inclusion of Gentile believers without circumcision.",
+      "preferred_for_hlt": "…so that the remnant of men, and all the Gentiles upon whom my name is called, may earnestly seek [the Lord]…",
+      "hlt_rationale": "James cites this verse in its LXX form at the Jerusalem council (Acts 15:13-21) as decisive scriptural warrant for Gentile inclusion in the church. The apostolic application of the LXX reading to the foundational question of Gentile salvation establishes it as the authoritative Christian reading. HLT follows the LXX form; the MT \"dispossess the remnant of Edom\" is footnoted with a note that Mur88 (2nd c. AD) is the only Hebrew witness and reads with the MT.",
+      "witnesses": [
+        {
+          "manuscript": "Mur88",
+          "manuscript_date": "~135 CE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "LXX",
+          "manuscript_date": "~150 BCE",
+          "reading_support": "supports_variant"
+        },
+        {
+          "manuscript": "Masoretic Text",
+          "manuscript_date": "~900 CE",
+          "reading_support": "supports_mt"
+        },
+        {
+          "manuscript": "Acts 15:17 (James, Jerusalem council)",
+          "manuscript_date": "~50 CE",
+          "reading_support": "supports_variant"
+        }
+      ]
+    }
+  ]
+}

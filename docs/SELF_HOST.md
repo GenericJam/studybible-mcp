@@ -40,8 +40,27 @@ This guide covers running your own instance of the Study Bible MCP server.
 5. **Build the database**
    ```bash
    python scripts/build_database.py
+   python scripts/import_heiser_content.py
    ```
-   This creates the base `db/study_bible.db`. Its final size depends on the optional graph, commentary, and embedding datasets; the deployed database is currently over 600MB.
+   This creates the base `db/study_bible.db` and imports the bundled attributed
+   theology and manuscript-variant records. Its final size depends on the
+   optional graph, commentary, and embedding datasets; the deployed database is
+   about 750MB once the MT/LXX and Josephus corpora are imported.
+
+   To bring an existing database (for example one downloaded from a deployment)
+   up to the current schema and sources, upgrade it in place instead of
+   rebuilding:
+   ```bash
+   python scripts/upgrade_database.py --database db/study_bible.db
+   ```
+   The upgrade downloads the pinned LXX/Brenton and Josephus sources (present
+   files are skipped and every file is checksum-verified), migrates the legacy
+   mixed `textual_variants` tables, imports MT/LXX, Josephus, and the bundled
+   variant cases, and runs SQLite integrity and foreign-key checks on a
+   temporary copy. The original file is replaced only when everything
+   succeeds, and re-running is safe. Pass `--offline` to use sources already
+   under `data/`. A server pointed at a database that has not been upgraded
+   answers `get_textual_variant` with a message to run this script.
 
 6. **Run the server**
 
@@ -129,7 +148,7 @@ curl http://localhost:8080/health
 
 3. **Create a volume for the database**
    ```bash
-   fly volumes create studybible_data --size 1 --region <your-region>
+   fly volumes create studybible_data --size 3 --region <your-region>
    ```
 
 4. **Deploy**
@@ -198,7 +217,9 @@ python scripts/download_stepbible.py --force
 python scripts/build_database.py --rebuild
 ```
 
-For Docker, restart the container with the rebuilt database mount. On Fly.io, upload the database to the persistent volume separately from the code deployment; see `.claude/commands/deploy-db.md`.
+To upgrade an existing database without a rebuild, run `python scripts/upgrade_database.py --database db/study_bible.db` (see step 5 above).
+
+For Docker, restart the container with the rebuilt database mount. On Fly.io, upload the database to the persistent volume separately from the code deployment, and upload it before running `fly deploy` for code that needs the new tables. Upload it next to the live file under a temporary name, check its size and checksum, then `mv` it over the old database; never delete the live database first. `scripts/upload-db.sh` does this and stops before uploading if `df` shows too little free space. Extend the volume with `fly volumes extend <volume-id> --size <GB>` if needed. The full runbook is in `.claude/commands/deploy-db.md`.
 
 ---
 
@@ -229,7 +250,7 @@ fly ssh console
 
 ### Self-hosted
 - Python 3.10+ and enough memory for SQLite queries
-- At least 1GB of database storage; allow additional space for downloads, rebuilds, and embeddings
+- At least 3GB of database storage: the ~750MB database, a full temporary copy during upgrades or uploads, plus downloads and embeddings
 
 ---
 

@@ -559,7 +559,25 @@ Find structurally paired Torah passages under Moshe Kline's Woven Torah hypothes
 
 #### `get_textual_variant`
 
-Inspect catalogued MT/LXX/DSS readings, manuscript witnesses, and NT quotations of LXX forms.
+Inspect catalogued MT/LXX/DSS divergences without collapsing sources and
+conclusions. Each reading lists only the manuscripts that witness it. New
+Testament quotations appear under **NT citation evidence**, and material that
+bears on a text form without witnessing the verse (such as a Qumran scroll
+attesting a short edition elsewhere in Jeremiah) appears under **Indirect
+evidence**. Corpora with no surviving copy are listed in a case-level **Not
+preserved in** note. Every witness keeps the dataset's raw support label.
+
+**Critical judgments** contain only conclusions that carry a source citation.
+Uncited dataset summaries appear separately as an **Unsourced dataset summary
+(not verified against published text-critical scholarship)**. Theological
+interpretations, named-author claims, translation decisions, and NT quotation
+alignment also stay in their own sections, and sections with nothing
+catalogued are omitted. Verses where the witnesses agree with the MT but the
+reading or rendering is contested (for example the divine-council language of
+Psalm 82:6) appear as **Translation and interpretation notes**, never as
+variants. `lookup_verse` mentions when a verse has a catalogued variant case or
+interpretation notes. On a database that still has the legacy
+variant schema, the tool asks you to run `python scripts/upgrade_database.py`.
 
 ---
 
@@ -888,6 +906,7 @@ studybible-mcp/
 │   ├── build_database.py      # Build SQLite database
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
+│   ├── upgrade_database.py    # In-place schema/source upgrade of an existing DB
 │   └── smoke_server.py        # Full-database manual smoke suite
 ├── tests/                     # Deterministic unit and tool-selection tests
 ├── prompts/

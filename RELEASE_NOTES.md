@@ -2,6 +2,60 @@
 
 ---
 
+## Textual evidence and interpretation separation
+
+- Replaced the mixed textual-variant record with independent tables and output
+  sections for manuscript readings and witnesses, critical judgments,
+  theological interpretations, named-author claims, and translation decisions.
+- Classified every witness with an explicit evidence type. Manuscripts attach
+  to the reading they support. NT quotations are reported as citation
+  evidence, scrolls that attest a text form only elsewhere in the book as
+  indirect evidence, and corpora with no copy of the verse in a case-level
+  "Not preserved in" note. At Jeremiah 33:14 the Masoretic Text now supports
+  the MT long reading instead of the LXX omission. Unknown support labels
+  abort the import, and the raw label is preserved on every witness.
+- Limited "Critical judgments" to conclusions with a source citation. Uncited
+  dataset summaries are shown separately as an unsourced dataset summary that
+  has not been verified against published text-critical scholarship.
+- Kept NT quotation alignment separate from both textual evidence and the HLT's
+  translation decisions.
+- Kept the legacy `MT_preserved` and `translation_choice` records (18 verses,
+  e.g. Psalm 82:6, Genesis 6:2, Daniel 7:13) as interpretive cases. The MT and
+  the versions agree at these verses, so they are shown under "Translation and
+  interpretation notes" with the MT as the only reading, never as variants.
+  Their HLT readings and rationales become translation decisions, Heiser's
+  analysis an author claim, and the record's prose attributed interpretation.
+- Omitted output sections with nothing catalogued instead of printing
+  "No ... catalogued" placeholders.
+- Added a one-time migration that preserves every legacy record, witness, and
+  NT quotation link while removing the obsolete mixed tables.
+- Exported the six variant cases that existed only in the database (Jeremiah
+  33:14, Psalm 40:6, Psalm 8:2, Isaiah 61:1, Isaiah 40:5, Amos 9:12) to
+  `data/heiser/variants/lxx_cases.json`, and the 18 NT quotation hints to
+  `data/heiser/lxx_quote_hints.json`, so a fresh build reproduces them. Added
+  the Deuteronomy 32:43 rationale's Hebrews 1:6 sentence to the bundled JSON,
+  so re-importing it no longer reverts the database text.
+- Made each variant record's replacement atomic: records are validated before
+  any row is deleted and written inside a savepoint. A malformed record keeps
+  its previously imported rows and fails the import with an error instead of
+  being skipped silently.
+- `get_textual_variant` now distinguishes a legacy or missing schema (run
+  `python scripts/upgrade_database.py`), a reference that is not a single
+  verse, and a verse with no catalogued case. `lookup_verse` now mentions
+  catalogued variant cases and, separately, translation and interpretation
+  notes.
+- Added `scripts/upgrade_database.py`, a repeatable in-place upgrade. It
+  downloads the pinned sources, migrates, imports MT/LXX, Josephus, and the
+  bundled variants, and checks integrity and foreign keys on a temporary copy
+  before atomically replacing the database.
+- `scripts/smoke_server.py` now decides skips from table row counts and fails
+  tools that return empty or no-match results when their data is present.
+- The Fly runbook and `scripts/upload-db.sh` now upload next to the live
+  database, verify size and SHA-256, and `mv` the file into place. They also
+  check free space with `df` and never delete the live database first.
+
+---
+
 ## Josephus primary-source search
 
 - Added `search_ancient_sources` with full-text, corpus, biblical-reference,

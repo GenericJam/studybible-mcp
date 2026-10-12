@@ -28,7 +28,7 @@ from mcp.types import (
 
 import json
 
-from .database import BOOK_ABBREV_MAP, StudyBibleDB
+from .database import BOOK_ABBREV_MAP, INTERPRETIVE_CASE_KEYS, StudyBibleDB
 
 # Purple book with gold cross icon (32x32 PNG, base64 encoded)
 ICON_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42mNgGOmAEZtgQ9TV/7SwrGGZNiNeB9DKYnwOYcGl6MajG1S1VENOA6s4E4yxounvfw0NDZpYjm4mckgz0drnhMxmIdew5bO3M9w+twfOr5veS5Y5TAOdDUcdMOAOYCE2wWEDqkYueNVEpnpSxwHIqR3ZcmziqMBzNA1QJwqwFTLocT5aEI06YNQBow6gaUGEDUAqGk/qhwCu1iutWsY4+wW0bJYT1S+gZUgMqq7ZKAAA/oE/8EmGTpMAAAAASUVORK5CYII="
@@ -37,7 +37,7 @@ from .tools import (
     format_genealogy, format_person_events, format_place_history,
     format_passage_entities, format_connection_path,
     format_enriched_verse, format_biblical_version_comparison,
-    format_ancient_source_results,
+    format_ancient_source_results, format_textual_variant_cases,
     mermaid_genealogy, mermaid_connection_path, mermaid_person_timeline,
     mermaid_place_network,
     format_study_notes, format_dictionary_article, format_key_terms,
@@ -205,10 +205,25 @@ async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
                 f"Torah hypothesis.*"
             )
 
+    # Hint: a catalogued manuscript-variant or interpretive case for this verse.
+    case_keys = await db.get_textual_variant_case_keys(reference)
+    variant_case_keys = [k for k in case_keys if k not in INTERPRETIVE_CASE_KEYS]
+    if variant_case_keys:
+        result += (
+            f"\n\n---\n*Textual variant catalogued for this verse "
+            f"({', '.join(variant_case_keys)}): readings, witnesses, and "
+            f"attributed analysis via `get_textual_variant` (reference='{reference}').*"
+        )
+    elif case_keys:
+        result += (
+            f"\n\n---\n*Translation and interpretation notes catalogued for this "
+            f"verse (no manuscript variant): translation decisions and attributed "
+            f"analysis via `get_textual_variant` (reference='{reference}').*"
+        )
+
     # Hint: NT↔OT LXX-form quotation. Surfaces in both directions — looking up
-    # the OT verse mentions the NT quotation, looking up the NT verse mentions
-    # the OT source. Apostolic endorsement of the LXX form is the HLT's
-    # preferred-reading criterion (feedback_lxx_nt_quotation).
+    # the OT verse mentions the NT quotation, while looking up the NT verse
+    # mentions the OT source.
     lxx_hints = await db.get_nt_ot_lxx_quote_hints(reference)
     if lxx_hints:
         # Show at most 2 hints inline — keep the cue terse.
@@ -222,7 +237,7 @@ async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
                 cues.append(f"quotes **{h['ot_display']}** in its LXX form ({h['divergence_type']})")
         result += (
             f"\n\n---\n*NT↔OT LXX-form quotation: " + "; ".join(cues) + ". "
-            f"Full reading comparison + manuscript witnesses via "
+            f"Separated manuscript evidence and attributed analysis via "
             f"`get_textual_variant` (reference='{reference}').*"
         )
 
@@ -1228,83 +1243,55 @@ async def handle_get_torah_weave(args: dict[str, Any]) -> list[TextContent]:
     return text(result)
 
 
-async def handle_get_textual_variant(args: dict[str, Any]) -> list[TextContent]:
-    """Surface MT/LXX/DSS textual-variant data + NT-quote alignment for a verse.
+_SINGLE_VERSE_REFERENCE = re.compile(r"^[1-3]?[A-Za-z]{2,3}\.\d+\.\d+[a-z]?$")
 
-    Resolves both directions: an OT reference returns its variant row plus any
-    NT verses that quote the LXX form; a NT reference returns the OT verse it
-    quotes plus the variant row. Apostolic endorsement (NT quoting LXX) is the
-    HLT's preferred-reading criterion — see preferred_for_hlt + hlt_rationale.
-    """
-    reference = args.get("reference", "")
+
+async def handle_get_textual_variant(args: dict[str, Any]) -> list[TextContent]:
+    """Return textual evidence and separately attributed interpretive layers."""
+    reference = args.get("reference", "").strip()
     if not reference:
         return text("Please provide a verse reference (OT or NT).")
 
-    hints = await db.get_nt_ot_lxx_quote_hints(reference)
-    variants = await db.get_textual_variants(reference)
-
-    # If the input was a NT verse, also pull the variant row for the OT side it quotes.
-    if hints and not variants:
-        for h in hints:
-            ot_variants = await db.get_textual_variants(h["ot_reference"])
-            for v in ot_variants:
-                if v not in variants:
-                    variants.append(v)
-
-    if not hints and not variants:
+    status = await db.textual_variant_schema_status()
+    if status != "ready":
+        reason = {
+            "legacy": "still uses the legacy textual-variant schema",
+            "missing": "has no textual-variant tables",
+            "empty": "has no textual-variant cases loaded",
+        }[status]
         return text(
-            f"No textual-variant or LXX-quotation data on file for {reference}.\n\n"
-            "This means either: (a) the verse has no significant MT/LXX/DSS "
-            "divergence we have catalogued, or (b) the NT does not quote it in "
-            "a form that differs from the MT. For OT verses with NT quotations "
-            "that follow the LXX, try the NT reference instead (e.g. 'Hebrews "
-            "10:5', 'Luke 4:18', 'Acts 15:17')."
+            f"Textual-variant data is unavailable: this database {reason}. "
+            "Run `python scripts/upgrade_database.py` to migrate it and import "
+            "the bundled variant cases."
         )
 
-    lines: list[str] = [f"# Textual variant + NT-quotation data for {reference}\n"]
-
-    if variants:
-        for v in variants:
-            lines.append(f"## Variant at {v['reference']} ({v.get('variant_source','')})\n")
-            if v.get("variant_significance"):
-                lines.append(f"**Significance**: {v['variant_significance']}\n")
-            lines.append(f"### Masoretic Text (MT)\n{v.get('mt_reading','')}\n")
-            if v.get("mt_hebrew"):
-                lines.append(f"\n*Hebrew*: `{v['mt_hebrew']}`\n")
-            lines.append(f"\n### Variant reading\n{v.get('variant_reading','')}\n")
-            if v.get("variant_original"):
-                lines.append(f"\n*Original*: `{v['variant_original']}`\n")
-            if v.get("scholarly_consensus"):
-                lines.append(f"\n### Scholarly consensus\n{v['scholarly_consensus']}\n")
-            if v.get("preferred_for_hlt"):
-                lines.append(f"\n### HLT preferred reading\n{v['preferred_for_hlt']}\n")
-            if v.get("hlt_rationale"):
-                lines.append(f"\n*Rationale*: {v['hlt_rationale']}\n")
-            if v.get("heiser_analysis"):
-                lines.append(f"\n### Heiser's analysis\n{v['heiser_analysis']}\n")
-            witnesses = v.get("witnesses") or []
-            if witnesses:
-                lines.append("\n### Manuscript witnesses\n")
-                for w in witnesses:
-                    date = f" ({w['manuscript_date']})" if w.get("manuscript_date") else ""
-                    support = f" — {w['reading_support']}" if w.get("reading_support") else ""
-                    lines.append(f"- **{w['manuscript']}**{date}{support}")
-            lines.append("")
-
-    if hints:
-        lines.append("\n## NT quotations that follow the LXX form\n")
-        for h in hints:
-            lines.append(
-                f"- **{h['nt_display']}** quotes **{h['ot_display']}** — "
-                f"*{h.get('divergence_type','')}*: {h.get('divergence_note','')}"
-            )
-        lines.append(
-            "\n*HLT principle: where the NT quotes an LXX form, that form is "
-            "the authoritative reading for Christian Scripture — apostolic "
-            "endorsement overrides text-critical priority.*"
+    normalized = db._normalize_reference(reference)
+    if not _SINGLE_VERSE_REFERENCE.match(normalized):
+        return text(
+            f"'{reference}' is not a single-verse reference. get_textual_variant "
+            "takes one verse, e.g. 'Deuteronomy 32:8' or 'Hebrews 10:5'."
         )
 
-    return text("\n".join(lines))
+    hints = await db.get_nt_ot_lxx_quote_hints(reference)
+    cases = await db.get_textual_variant_cases(reference)
+
+    # A query may use the NT side of a quotation alignment. Resolve its OT
+    # variant case without merging the alignment note into manuscript evidence.
+    if hints and not cases:
+        seen_case_ids: set[int] = set()
+        for hint in hints:
+            for case in await db.get_textual_variant_cases(hint["ot_reference"]):
+                if case["id"] not in seen_case_ids:
+                    cases.append(case)
+                    seen_case_ids.add(case["id"])
+
+    if not hints and not cases:
+        return text(
+            f"No textual-variant case or NT quotation alignment is catalogued "
+            f"for {reference}."
+        )
+
+    return text(format_textual_variant_cases(reference, cases, hints))
 
 
 _TOOL_HANDLERS = {

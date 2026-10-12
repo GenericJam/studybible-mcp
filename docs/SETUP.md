@@ -70,7 +70,7 @@ Once connected, you have access to these tools:
 | `get_ane_context` | Ancient cultural context | "ANE context for Genesis 15" |
 | `get_theology_context` | Attributed theological scholarship | "Scholarship on Psalm 82" |
 | `get_torah_weave` | Torah structural pairings | "Pairings for Genesis 1:1" |
-| `get_textual_variant` | MT/LXX/DSS textual evidence | "Variant at Deuteronomy 32:8" |
+| `get_textual_variant` | Separates manuscript evidence, critical judgments, theological interpretations, and author claims | "Variant at Deuteronomy 32:8" |
 
 ## Example Questions
 

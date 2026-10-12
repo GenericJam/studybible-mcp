@@ -1,0 +1,238 @@
+{
+  "hints": [
+    {
+      "nt_reference": "Heb.10.5",
+      "nt_display": "Hebrews 10:5-7",
+      "nt_book": "Heb",
+      "ot_reference": "Psa.40.6",
+      "ot_display": "Psalm 40:6",
+      "ot_book": "Psa",
+      "follows_lxx": 1,
+      "divergence_type": "vorlage_or_paraphrase",
+      "divergence_note": "LXX \"a body you prepared for me\" vs MT \"ears you have dug for me\"; applied to Christ's incarnation.",
+      "variant_case": {
+        "reference": "Psa.40.6",
+        "case_key": "LXX_quoted_in_NT"
+      }
+    },
+    {
+      "nt_reference": "Heb.1.6",
+      "nt_display": "Hebrews 1:6",
+      "nt_book": "Heb",
+      "ot_reference": "Deu.32.43",
+      "ot_display": "Deuteronomy 32:43",
+      "ot_book": "Deu",
+      "follows_lxx": 1,
+      "divergence_type": "absent_in_mt",
+      "divergence_note": "LXX + 4QDeut^q have \"let all the angels of God worship him\"; MT lacks the bicolon. Applied to Christ.",
+      "variant_case": {
+        "reference": "Deu.32.43",
+        "case_key": "DSS_4QDeutq"
+      }
+    },
+    {
+      "nt_reference": "Mat.12.20",
+      "nt_display": "Matthew 12:20-21",
+      "nt_book": "Mat",
+      "ot_reference": "Isa.42.4",
+      "ot_display": "Isaiah 42:4",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "paraphrase",
+      "divergence_note": "LXX \"in his name shall Gentiles trust\" paraphrases MT \"for his torah the islands wait.\" Applied to Christ's gentle ministry.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Act.15.17",
+      "nt_display": "Acts 15:17",
+      "nt_book": "Act",
+      "ot_reference": "Amo.9.12",
+      "ot_display": "Amos 9:12",
+      "ot_book": "Amo",
+      "follows_lxx": 1,
+      "divergence_type": "vorlage_diff",
+      "divergence_note": "LXX \"remnant of men shall seek the Lord\" vs MT \"dispossess the remnant of Edom\" — one-consonant Hebrew differences. James's scriptural warrant for Gentile inclusion.",
+      "variant_case": {
+        "reference": "Amo.9.12",
+        "case_key": "LXX_quoted_in_NT"
+      }
+    },
+    {
+      "nt_reference": "Luk.4.18",
+      "nt_display": "Luke 4:18-19",
+      "nt_book": "Luk",
+      "ot_reference": "Isa.61.1",
+      "ot_display": "Isaiah 61:1",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "paraphrase",
+      "divergence_note": "LXX adds \"recovery of sight to the blind\"; MT has \"to prisoners, opening.\" Four Qumran scrolls confirm MT. Jesus quotes the LXX form in the Nazareth synagogue.",
+      "variant_case": {
+        "reference": "Isa.61.1",
+        "case_key": "LXX_quoted_in_NT"
+      }
+    },
+    {
+      "nt_reference": "Act.13.41",
+      "nt_display": "Acts 13:41",
+      "nt_book": "Act",
+      "ot_reference": "Hab.1.5",
+      "ot_display": "Habakkuk 1:5",
+      "ot_book": "Hab",
+      "follows_lxx": 1,
+      "divergence_type": "translation_choice",
+      "divergence_note": "LXX has indefinite τις (\"though someone declare it\"); MT \"though it be told.\" Paul's warning at Pisidian Antioch.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Luk.3.6",
+      "nt_display": "Luke 3:6",
+      "nt_book": "Luk",
+      "ot_reference": "Isa.40.5",
+      "ot_display": "Isaiah 40:5",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "expansion",
+      "divergence_note": "LXX adds \"the salvation of God\"; MT ends \"all flesh shall see together.\" Two Qumran scrolls confirm MT. Applied to John the Baptist.",
+      "variant_case": {
+        "reference": "Isa.40.5",
+        "case_key": "LXX_quoted_in_NT"
+      }
+    },
+    {
+      "nt_reference": "Mat.21.16",
+      "nt_display": "Matthew 21:16",
+      "nt_book": "Mat",
+      "ot_reference": "Psa.8.2",
+      "ot_display": "Psalm 8:2",
+      "ot_book": "Psa",
+      "follows_lxx": 1,
+      "divergence_type": "vorlage_or_paraphrase",
+      "divergence_note": "LXX \"perfected praise\" for MT \"established strength.\" Jesus defends the children's acclamation in the temple.",
+      "variant_case": {
+        "reference": "Psa.8.2",
+        "case_key": "LXX_quoted_in_NT"
+      }
+    },
+    {
+      "nt_reference": "Rom.9.29",
+      "nt_display": "Romans 9:29",
+      "nt_book": "Rom",
+      "ot_reference": "Isa.1.9",
+      "ot_display": "Isaiah 1:9",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "translation_choice",
+      "divergence_note": "LXX σπέρμα (\"seed\") for MT שריד (\"survivor\"). 1QIsa^a reads with MT. Paul's argument on the faithful remnant.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Rom.9.27",
+      "nt_display": "Romans 9:27-28",
+      "nt_book": "Rom",
+      "ot_reference": "Isa.10.22",
+      "ot_display": "Isaiah 10:22-23",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "translation_choice",
+      "divergence_note": "LXX \"shall be saved\" interprets MT \"shall return.\" 1QIsa^a reads with MT. Paul's argument on the remnant of Israel.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Rom.10.20",
+      "nt_display": "Romans 10:20",
+      "nt_book": "Rom",
+      "ot_reference": "Isa.65.1",
+      "ot_display": "Isaiah 65:1",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "paraphrase",
+      "divergence_note": "LXX \"I became manifest\" paraphrases MT \"I let myself be consulted/found.\" Two Qumran scrolls confirm MT. Paul on Gentile inclusion.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Act.7.43",
+      "nt_display": "Acts 7:43",
+      "nt_book": "Act",
+      "ot_reference": "Amo.5.26",
+      "ot_display": "Amos 5:26",
+      "ot_book": "Amo",
+      "follows_lxx": 1,
+      "divergence_type": "transliteration",
+      "divergence_note": "LXX Ραιφάν / MT Kiyyun — same astral deity (Saturn), different transliteration. Stephen's speech.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Rom.15.12",
+      "nt_display": "Romans 15:12",
+      "nt_book": "Rom",
+      "ot_reference": "Isa.11.10",
+      "ot_display": "Isaiah 11:10",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "paraphrase",
+      "divergence_note": "LXX adds \"Gentiles trust\"; MT \"nations shall seek him.\" Two Qumran scrolls confirm MT. Paul's climactic argument for Gentile inclusion.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Rom.2.24",
+      "nt_display": "Romans 2:24",
+      "nt_book": "Rom",
+      "ot_reference": "Isa.52.5",
+      "ot_display": "Isaiah 52:5",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "expansion",
+      "divergence_note": "LXX expanded \"among the Gentiles, because of you\"; MT is shorter. Two Qumran scrolls confirm MT shorter form. Paul indicts Jewish hypocrisy.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Act.8.33",
+      "nt_display": "Acts 8:32-33",
+      "nt_book": "Act",
+      "ot_reference": "Isa.53.8",
+      "ot_display": "Isaiah 53:8",
+      "ot_book": "Isa",
+      "follows_lxx": 1,
+      "divergence_type": "paraphrase",
+      "divergence_note": "LXX \"in humiliation\" paraphrases MT \"from oppression\"; rest closely follows MT. Four Qumran scrolls confirm MT. The Ethiopian eunuch passage.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "1Pe.4.18",
+      "nt_display": "1 Peter 4:18",
+      "nt_book": "1Pe",
+      "ot_reference": "Pro.11.31",
+      "ot_display": "Proverbs 11:31",
+      "ot_book": "Pro",
+      "follows_lxx": 1,
+      "divergence_type": "paraphrase",
+      "divergence_note": "LXX Proverbs is paraphrastic throughout. \"Righteous scarcely saved\" vs MT \"righteous repaid on earth.\" Peter's exhortation in suffering.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Eph.4.26",
+      "nt_display": "Ephesians 4:26",
+      "nt_book": "Eph",
+      "ot_reference": "Psa.4.4",
+      "ot_display": "Psalm 4:4",
+      "ot_book": "Psa",
+      "follows_lxx": 1,
+      "divergence_type": "translation_choice",
+      "divergence_note": "Hebrew רגזו means both \"tremble\" and \"be agitated/angry\"; LXX picked the latter. Paul's ethical exhortation.",
+      "variant_case": null
+    },
+    {
+      "nt_reference": "Luk.3.36",
+      "nt_display": "Luke 3:36",
+      "nt_book": "Luk",
+      "ot_reference": "Gen.11.12",
+      "ot_display": "Genesis 11:12-13",
+      "ot_book": "Gen",
+      "follows_lxx": 1,
+      "divergence_type": "absent_in_mt",
+      "divergence_note": "LXX includes a second Cainan between Arphaxad and Shelah; MT lacks. Luke's genealogy of Jesus follows the LXX chronology.",
+      "variant_case": null
+    }
+  ]
+}
