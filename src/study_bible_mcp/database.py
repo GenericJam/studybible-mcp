@@ -151,6 +151,32 @@ def book_code(name: str) -> str | None:
     return None
 
 
+# Books with a single chapter, conventionally cited by verse alone ("Jude 3").
+SINGLE_CHAPTER_BOOKS = frozenset({"Oba", "Phm", "2Jn", "3Jn", "Jud"})
+_SINGLE_CHAPTER_REF_RE = re.compile(
+    r"^\s*(?P<book>(?:[1-4]\s*)?[A-Za-z]+(?:\s+[A-Za-z]+)*)\.?"
+    r"(?:\s*(?P<verses>\d+[a-z]?(?:\s*[-\u2010-\u2015\u2212]\s*\d+[a-z]?)?))?\s*$"
+)
+
+
+def expand_single_chapter_reference(reference: str) -> str:
+    """Rewrite verse-only citations of single-chapter books as chapter 1.
+
+    'Jude 3' -> 'Jude 1:3', 'Philemon 4-6' -> 'Philemon 1:4-6', and a bare
+    'Jude' -> 'Jude 1' (the whole book). A lone number is a verse, matching
+    standard citation style. Anything else, including 'Jude 1:3', is
+    returned unchanged.
+    """
+    match = _SINGLE_CHAPTER_REF_RE.match(reference)
+    if not match or book_code(match["book"]) not in SINGLE_CHAPTER_BOOKS:
+        return reference
+    book = re.sub(r"\s+", " ", match["book"]).strip()
+    if not match["verses"]:
+        return f"{book} 1"
+    verses = re.sub(r"\s*[\u2010-\u2015\u2212-]\s*", "-", match["verses"])
+    return f"{book} 1:{verses}"
+
+
 def parse_passage_reference(
     reference: str,
 ) -> tuple[str, str | None, tuple[int, int, str], tuple[int, int, str]] | None:
@@ -450,6 +476,130 @@ class StudyBibleDB:
             "SELECT * FROM verses WHERE word_data LIKE ? LIMIT ?",
             (f'%"{strongs}"%', limit),
         )
+
+    # "Luke 19", "Luke 19:1-3", "Luke 19:45-20:2", "Psalm 23-24", "Luk.19.1".
+    _PASSAGE_RE = re.compile(
+        r"^(?P<book>[1-4]?\s*[A-Za-z]+(?:\s+[A-Za-z]+)*)\s*\.?\s*"
+        r"(?P<c1>\d+)(?:[:.](?P<v1>\d+)[a-z]?)?"
+        r"(?:\s*-\s*(?:(?P<c2>\d+)[:.])?(?P<v2>\d+)[a-z]?)?$",
+        re.IGNORECASE,
+    )
+    _BOOK_CODES = {code.lower(): code for code in BOOK_ABBREV_MAP.values()}
+
+    @classmethod
+    def parse_passage_reference(cls, reference: str) -> dict | None:
+        """Parse a verse, verse range, cross-chapter range, or chapter reference.
+
+        Returns ``{"book", "book_name", "start_chapter", "start_verse",
+        "end_chapter", "end_verse"}`` using English numbering. A ``None``
+        verse means "from the start" / "to the end" of that chapter. Hyphen,
+        en dash, and em dash all separate a range. Returns ``None`` when the
+        text is not a reference of a supported shape.
+        """
+        text = re.sub(r"\s*[\u2010-\u2015\u2212-]\s*", "-", reference.strip())
+        match = cls._PASSAGE_RE.match(text)
+        if not match:
+            return None
+        book_name = re.sub(r"\s+", " ", match["book"]).strip()
+        key = book_name.lower()
+        compact = key.replace(" ", "")
+        book = (
+            BOOK_ABBREV_MAP.get(key)
+            or BOOK_ABBREV_MAP.get(compact)
+            or cls._BOOK_CODES.get(compact)
+            or compact[:3].title()
+        )
+        start_chapter = int(match["c1"])
+        start_verse = int(match["v1"]) if match["v1"] else None
+        end_chapter = int(match["c2"]) if match["c2"] else start_chapter
+        end_verse = int(match["v2"]) if match["v2"] else None
+        if match["v2"] and not match["c2"] and start_verse is None:
+            # "Psalm 23-24": a range of whole chapters.
+            end_chapter, end_verse = end_verse, None
+        elif match["v2"] is None and start_verse is not None:
+            # Single verse.
+            end_verse = start_verse
+        return {
+            "book": book,
+            "book_name": book_name,
+            "start_chapter": start_chapter,
+            "start_verse": start_verse,
+            "end_chapter": end_chapter,
+            "end_verse": end_verse,
+        }
+
+    async def get_chapter_verse_bounds(self, book: str) -> dict[int, tuple[int, int]]:
+        """Map each chapter of ``book`` to its (first, last) English verse number."""
+        rows = await self._fetchall(
+            """SELECT chapter, MIN(verse) AS first, MAX(verse) AS last
+               FROM verses WHERE book = ? GROUP BY chapter""",
+            (book,),
+        )
+        return {row["chapter"]: (row["first"], row["last"]) for row in rows}
+
+    async def get_passage(
+        self,
+        book: str,
+        start_chapter: int,
+        start_verse: int,
+        end_chapter: int,
+        end_verse: int,
+    ) -> list[dict]:
+        """Get verse rows for an English-numbered passage, in canonical order.
+
+        Matches the ``book``/``chapter``/``verse`` columns (English numbering)
+        rather than ``reference`` strings, so OT rows whose reference carries
+        English(Hebrew) split numbering such as ``Psa.40.6(40.7)`` are found.
+        A verse stored as several rows (e.g. ``1Ch.12.4`` and
+        ``1Ch.12.4(12.5)``) returns every row, in source order.
+        """
+        return await self._fetchall(
+            """SELECT * FROM verses
+               WHERE book = ?
+                 AND chapter BETWEEN ? AND ?
+                 AND (chapter > ? OR verse >= ?)
+                 AND (chapter < ? OR verse <= ?)
+               ORDER BY chapter, verse, id""",
+            (book, start_chapter, end_chapter, start_chapter, start_verse,
+             end_chapter, end_verse),
+        )
+
+    async def get_lxx_quote_hints_for_passage(
+        self,
+        book: str,
+        start_chapter: int,
+        start_verse: int,
+        end_chapter: int,
+        end_verse: int,
+    ) -> list[dict]:
+        """NT↔OT LXX-form quotation hints whose NT or OT verse lies in a passage.
+
+        Each returned row carries ``passage_side`` ("nt" or "ot"): the side of
+        the quotation that falls inside the requested passage.
+        """
+        if not await self._table_has_rows("nt_ot_lxx_quote_hints"):
+            return []
+        rows = await self._fetchall(
+            """SELECT * FROM nt_ot_lxx_quote_hints
+               WHERE nt_book = ? OR ot_book = ? ORDER BY id""",
+            (book, book),
+        )
+        start = (start_chapter, start_verse)
+        end = (end_chapter, end_verse)
+        hits = []
+        for row in rows:
+            for side in ("ot", "nt"):
+                parts = row[f"{side}_reference"].split(".")
+                if len(parts) < 3 or parts[0] != book:
+                    continue
+                try:
+                    position = (int(parts[1]), int(parts[2]))
+                except ValueError:
+                    continue
+                if start <= position <= end:
+                    hits.append({**row, "passage_side": side})
+                    break
+        return hits
     
     # =========================================================================
     # Cross-reference queries
@@ -1829,15 +1979,32 @@ class StudyBibleDB:
             return "empty"
         return "ready"
 
-    async def get_textual_variant_case_keys(self, reference: str) -> list[str]:
-        """Return case keys catalogued for a verse; empty if the table is absent."""
+    async def get_textual_variant_cases_in_span(
+        self,
+        book: str,
+        start_chapter: int,
+        start_verse: int,
+        end_chapter: int,
+        end_verse: int,
+    ) -> list[dict]:
+        """Return (chapter, verse, case_key) for cases inside an English-numbered span.
+
+        Empty when the table is absent or empty, so lookup_verse degrades on
+        databases that have not been upgraded.
+        """
         if not await self._table_has_rows("textual_variant_cases"):
             return []
-        rows = await self._fetchall(
-            "SELECT case_key FROM textual_variant_cases WHERE reference = ? ORDER BY id",
-            (self._normalize_reference(reference),),
+        return await self._fetchall(
+            """SELECT chapter, verse, case_key FROM textual_variant_cases
+               WHERE book = ?
+                 AND chapter * 1000 + verse BETWEEN ? AND ?
+               ORDER BY chapter, verse, id""",
+            (
+                book,
+                start_chapter * 1000 + start_verse,
+                end_chapter * 1000 + end_verse,
+            ),
         )
-        return [row["case_key"] for row in rows]
 
     async def get_textual_variant_cases(self, reference: str) -> list[dict]:
         """Get textual variant cases with each kind of claim kept separate.

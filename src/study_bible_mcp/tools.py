@@ -94,18 +94,25 @@ term's underlying vocabulary, or the semantic range behind an English rendering.
     Tool(
         name="lookup_verse",
         annotations=ToolAnnotations(title="Lookup Verse", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
-        description="""Look up the text of a Bible verse or verse range, in English and in the original language.
+        description="""Look up the text of a Bible verse, verse range, or whole chapter, in English and in the original language.
 
-Returns:
-- The English verse text
+Returns, for each verse in canonical order:
+- The English verse text (STEPBible word-by-word glosses)
 - The original Greek/Hebrew text (optional, on by default)
 - A word-by-word breakdown with Strong's numbers and glosses
 - Optional grammatical parsing for each word
+
+And once for the passage:
 - Genre-specific interpretive background for the passage's literary type
 - Availability notes for related data (cross-references, Torah weave partners,
-  and NT/OT LXX-quotation variants) where the verse has such records
+  and NT/OT LXX-quotation variants) where the verses have such records
 
-Accepts references such as 'John 3:16', 'Gen 1:1', or 'Romans 3:21-26'.
+Accepts 'John 3:16', 'Luke 19:1-3', cross-chapter ranges such as
+'Luke 19:45-20:2', and whole chapters such as 'Psalm 23'. Single-chapter books
+may be cited by verse alone ('Jude 3', 'Philemon 6', '3 John 4'). Numbering is
+English; a Psalm superscription (verse 1 in the Hebrew) is labelled as the
+superscription. Returns at most 50 verses per call, with a note naming the
+reference that continues a longer passage.
 
 Relevant whenever the verified wording of a passage, or its original-language
 form, is needed.""",
@@ -114,7 +121,7 @@ form, is needed.""",
             "properties": {
                 "reference": {
                     "type": "string",
-                    "description": "Bible reference (e.g., 'John 3:16', 'Genesis 1:1', 'Romans 3:21-26')"
+                    "description": "Bible reference (e.g., 'John 3:16', 'Luke 19:1-3', 'Luke 19:45-20:2', or a whole chapter such as 'Psalm 23')"
                 },
                 "include_original": {
                     "type": "boolean",
@@ -1195,11 +1202,28 @@ def format_lexicon_entry(entry: dict) -> str:
     return "\n".join(lines)
 
 
+def _verse_heading(verse: dict) -> str:
+    """Heading for a verse; English verse 0 is a Psalm superscription.
+
+    STEPBible stores superscriptions as English verse 0 with the Hebrew verse
+    in parentheses ('Psa.82.0(82.1)'), which reads oddly next to 'Psa.82.1'.
+    """
+    reference = verse["reference"]
+    if verse.get("verse") != 0:
+        return reference
+    match = re.match(r"^([^.]+)\.(\d+)\.0(?:\((\d+\.\d+)\))?$", reference)
+    if not match:
+        return reference
+    book, chapter, hebrew = match.groups()
+    label = f"{book}.{chapter} superscription"
+    return f"{label} (Hebrew {book}.{hebrew})" if hebrew else label
+
+
 def format_verse(verse: dict, include_original: bool = True, include_morphology: bool = False) -> str:
     """Format a verse for display."""
     lines = []
     
-    lines.append(f"## {verse['reference']}")
+    lines.append(f"## {_verse_heading(verse)}")
     lines.append("")
     lines.append(verse.get('text_english', 'No English text available.'))
     lines.append("")
