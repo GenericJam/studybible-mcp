@@ -1686,9 +1686,13 @@ class StudyBibleDB:
         corpus: str = "josephus",
         biblical_reference: str | None = None,
         period: str | None = None,
-        limit: int = 10,
+        limit: int = 4,
     ) -> dict:
         """Full-text search licensed ancient sources with optional indexed filters.
+
+        Only the passage text (English and folded Greek) is searched; the work
+        title and reference columns are display metadata, so a query word that
+        only appears in a title ("Jewish", "War", "Life") does not match.
 
         Returns a dict with ``status`` (``ok``, ``invalid_query``,
         ``invalid_reference``, ``corpus_missing``, ``no_link``, ``no_match``),
@@ -1761,7 +1765,8 @@ class StudyBibleDB:
         for match, operator in (("all", " AND "), ("any", " OR ")):
             if match == "any" and len(terms) == 1:
                 break
-            match_query = operator.join(f'"{term}"' for term in terms)
+            terms_query = operator.join(f'"{term}"' for term in terms)
+            match_query = f"{{text original_text_folded}} : ({terms_query})"
             rows = await self._fetchall(
                 f"""SELECT p.*, bm25(ancient_source_passages_fts) AS rank
                     FROM ancient_source_passages_fts

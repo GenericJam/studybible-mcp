@@ -181,9 +181,12 @@ compare_biblical_versions(
 )
 ```
 
-Every edition row includes its version, edition, language, canonical reference,
-edition reference, original text, English, license, and source URL, plus the
-versification mapping whenever it is not `identity`.
+Each edition row names its version, edition, and edition reference (plus the
+versification mapping whenever it is not `identity`), then its original text and
+English. Licences, source URLs, translation labels, the verse-mapping credit, and
+the Brenton caveat are listed once in a closing **Sources** block rather than on
+every row. A call returns at most 10 verses; a longer range or chapter is cut
+there with a note naming the verse to continue from.
 
 - **MT** comes from the STEPBible TAHOT verses already in the database (Westminster
   Leningrad Codex). Its English is STEPBible word glosses (interlinear, not a
@@ -226,8 +229,11 @@ Search licensed primary-source corpora for Jewish history. The initial
 `josephus` corpus contains 2,304 Whiston sections from *Jewish Antiquities*,
 *The Jewish War*, *Life*, and *Against Apion*. Each section is paired with
 every Niese Greek section it spans and referenced as a Niese span plus
-Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Results
-identify the edition, translation, license, and pinned source.
+Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Each
+result shows up to 1,500 characters of English around the first match and a
+shorter Greek excerpt (match-centred when the query is Greek); the edition,
+translation, license, and pinned source are listed once at the end. Up to 4
+passages are returned by default.
 
 ```text
 search_ancient_sources(
@@ -235,10 +241,12 @@ search_ancient_sources(
   corpus="josephus",
   biblical_reference="Mark 6:20",
   period="second_temple",
-  limit=5
+  limit=4
 )
 ```
 
+Only the passage text is searched, so a word that appears only in a work
+title (`Jewish`, `War`, `Life`) does not match every passage of that work.
 English search is stemmed (`build` matches `building`); Greek search ignores
 accents, breathings, and case (`βαπτισμω` matches `βαπτισμῷ`). Passages
 containing every query word come first; when none do, passages matching any
@@ -938,7 +946,10 @@ The LXX comparison corpus uses the complete 59-book
 Rahlfs morphology dataset, pinned to commit
 `c91f6b1e8fb3ba37df701e6ae31f675ace71a2b2`. Its explicit
 `verse_pairs.jsonl` mapping resolves Psalm numbering, Jeremiah's chapter order,
-2 Esdras, and smaller MT/LXX shifts. Downloads are checked against the pinned
+2 Esdras, and smaller MT/LXX shifts. That mapping is derived in part from
+[TVTMS](https://github.com/STEPBible/STEPBible-Data) (Tyndale Versification
+Traditions Mapping System), CC BY 4.0, created by STEPBible.org / Tyndale House
+Cambridge. Downloads are checked against the pinned
 Git blob hashes. Morphology is CC BY 4.0; the underlying Rahlfs (1935) Greek
 text is public domain. Only the LXX rows are stored (about 35 MB including
 indexes, with word morphology zlib-compressed); MT rows are read from the
@@ -980,6 +991,50 @@ contains it, and was checked against the passage text; the import fails if a
 link does not resolve. They do not assert literary dependence or historical
 agreement, and the Testimonium Flavianum link is marked as of disputed
 authenticity.
+
+### BDB Hebrew Lexicon
+
+The full unabridged Brown-Driver-Briggs Hebrew lexicon (8,090 entries) comes from [eliranwong/unabridged-BDB-Hebrew-lexicon](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon). The BDB is the standard scholarly Hebrew-English lexicon, originally published in 1906 and still widely used in academic study. Public domain text.
+
+### Abbott-Smith Greek Lexicon
+
+G. Abbott-Smith's *A Manual Greek Lexicon of the New Testament* (1922) provides NT-focused definitions that complement the broader classical coverage of LSJ. The TEI XML edition (5,896 entries) comes from [translatable-exegetical-tools/Abbott-Smith](https://github.com/translatable-exegetical-tools/Abbott-Smith). Public domain text.
+
+Abbott-Smith enriches 5,426 existing Greek entries with:
+
+| Field | Description | Coverage |
+|-------|-------------|----------|
+| **NT-focused definition** | Full definition with sense hierarchy | 5,871 entries |
+| **NT occurrence count** | Word frequency in the New Testament | 5,480 entries |
+| **LXX/Hebrew equivalents** | Hebrew words the Greek translates in the Septuagint | 3,317 entries |
+| **Synonym discussions** | Scholarly notes distinguishing related Greek words | 398 entries |
+
+### BibleAquifer
+
+Scholarly commentary and reference content from [BibleAquifer](https://github.com/BibleAquifer) (CC BY-SA 4.0):
+
+| Resource | Description | Content |
+|----------|-------------|---------|
+| **Aquifer Open Study Notes** | Verse-level scholarly commentary | 66 books |
+| **Tyndale Bible Dictionary** | Topical articles | 500+ articles on people, places, theology, history, archaeology |
+| **UW Translation Notes** | unfoldingWord translator commentary | Linguistic insights for 49+ books |
+| **SIL Translator Notes** | SIL International translator notes | Translation and cultural context |
+| **FIA Key Terms** | Key theological terms | 200+ carefully defined terms with cross-references |
+
+### ACAI Entity Annotations
+
+Rich entity annotations from [BibleAquifer/ACAI](https://github.com/BibleAquifer/ACAI) (CC BY-SA 4.0):
+
+| Type | Count | Content |
+|------|-------|---------|
+| People | ~2,500 | Family relationships, variant names, roles, speech attributions, verse references |
+| Places | ~400 | Geographic entities with biblical references |
+| Groups | ~200 | People groups, nations, tribes |
+| Key Terms | ~75 | Annotated theological concepts |
+
+### Theographic Bible Metadata
+
+Graph data for genealogy, events, and places from [Theographic](https://github.com/robertrouse/theographic-bible-metadata). Used by the `explore_genealogy`, `explore_person_events`, `explore_place`, `find_connection`, `people_in_passage`, and `graph_enriched_search` tools.
 
 ### Ancient Near East Context
 
@@ -1049,7 +1104,7 @@ Contributions welcome! Especially:
 MIT License. See [LICENSE](LICENSE).
 
 Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-OpenScriptorium LXX morphology and MT/LXX verse mappings are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
+OpenScriptorium LXX morphology and MT/LXX verse mappings (derived in part from STEPBible's TVTMS) are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
 The Perseus Josephus Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
@@ -1062,6 +1117,7 @@ The theology and ANE entries are original summary prose written for this project
 
 - [STEPBible](https://www.stepbible.org/) for the freely available biblical data
 - [OpenScriptorium](https://github.com/OpenScriptorium/lxx-morph) for Rahlfs LXX morphology and explicit MT/LXX verse mappings
+- [STEPBible.org / Tyndale House Cambridge](https://github.com/STEPBible/STEPBible-Data) for TVTMS, the versification data behind those mappings
 - [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
 - [Perseus Digital Library](https://github.com/PerseusDL/canonical-greekLit) for the licensed Josephus Greek and English editions
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
