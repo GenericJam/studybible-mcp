@@ -256,7 +256,7 @@ def test_hyphens_and_dashes_separate_name_tokens_but_not_locators():
 
 
 def test_unknown_work_and_unreadable_locator():
-    assert resolve_citation("Bava Batra 3b", list(CORPORA.values())).status == "unknown_work"
+    assert resolve_citation("Lifeboat 1-2", list(CORPORA.values())).status == "unknown_work"
     assert resolve_citation("Lifeboat 1", TEST_CORPORA).status == "unknown_work"
 
     bad = resolve_citation("Mishnah Bava Batra 3b", TEST_CORPORA)

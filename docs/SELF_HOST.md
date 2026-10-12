@@ -37,8 +37,9 @@ This guide covers running your own instance of the Study Bible MCP server.
    corpus, explicit MT/LXX versification mappings, public-domain Brenton English
    and Greek USFM, and every registered ancient-source corpus (currently the
    licensed Josephus and Philo Greek/English corpora, the 1 Enoch and 4 Ezra
-   pseudepigrapha, the Onkelos/Pseudo-Jonathan Aramaic/English targums, and the
-   Hebrew Qumran corpus) into `data/ancient_sources/<corpus>/`.
+   pseudepigrapha, the Onkelos/Pseudo-Jonathan Aramaic/English targums, the
+   Hebrew Qumran corpus, and the rabbinic Sefaria/Wikisource corpus) into
+   `data/ancient_sources/<corpus>/`.
    They validate source checksums before import; the build imports each
    downloaded corpus and fails on an incomplete one.
 5. **Build the database**

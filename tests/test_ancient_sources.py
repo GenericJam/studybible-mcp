@@ -331,7 +331,7 @@ async def test_lookup_caps_passages_and_explains_failures(tmp_path, monkeypatch)
 
     capped = await _call(db_path, monkeypatch, lookup, citation="Antiquities 18")
     out_of_range = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.200")
-    unknown = await _call(db_path, monkeypatch, lookup, citation="Bava Batra 3b-4a")
+    unknown = await _call(db_path, monkeypatch, lookup, citation="Lifeboat 1-2")
     no_locator = await _call(db_path, monkeypatch, lookup, citation="Antiquities")
     whiston = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.5.2")
     bad_corpus = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.116", corpus="nonesuch")
@@ -343,7 +343,7 @@ async def test_lookup_caps_passages_and_explains_failures(tmp_path, monkeypatch)
         "No passage covers Antiquities 18.200. Imported Antiquities runs Antiquities "
         "18.116–121; nearest passages: preceding Antiquities 18.120–121."
     )
-    assert unknown.startswith("Unknown work in citation 'Bava Batra 3b-4a'")
+    assert unknown.startswith("Unknown work in citation 'Lifeboat 1-2'")
     assert "Josephus (josephus): Antiquities, Life, Against Apion, War" in unknown
     assert no_locator.startswith("No locator in 'Antiquities'")
     assert "cited by book.section" in no_locator and "'Antiquities 18.116'" in no_locator

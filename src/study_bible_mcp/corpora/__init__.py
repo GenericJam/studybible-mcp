@@ -20,6 +20,7 @@ _CORPUS_MODULES = (
     "qumran",
     "philo",
     "pseudepigrapha",
+    "rabbinic",
 )
 
 

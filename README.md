@@ -249,8 +249,13 @@ that Yonge's text lacks are Greek only). `pseudepigrapha` holds 1 Enoch in
 R. H. Charles's English, one passage per Charles verse, and 4 Ezra (2 Esdras
 3–14) in the KJV with the Clementine Latin, one passage per verse (1,679
 passages); both works are non-canonical and are labelled as attributed to
-Enoch or Ezra. Each result names its corpus, work, and citation, and shows up
-to 1,500 characters of English around the first match and a shorter
+Enoch or Ezra. The
+`rabbinic` corpus holds 12,212 passages from Sefaria and Hebrew Wikisource:
+the Mishnah (63 tractates, by mishnah), the Tosefta (61 tractates, Vilna
+numbering, by halakhah), 16 Babylonian Talmud tractates (by amud, long amudim
+cut into segment ranges such as `Bava Batra 3b:1–9`), and Leviticus Rabbah (by
+section). Each result names its corpus, work, and citation, and shows up to
+1,500 characters of English around the first match and a shorter
 original-language excerpt (match-centred when the query is in the original's
 script; a passage without openly licensed English shows its original instead);
 the edition, translation, license, and pinned source are listed once at the
@@ -278,10 +283,10 @@ different word (`קדש` finds `מקדש`). Passages containing every query word
 first; when none do, passages matching any word are returned with an explicit
 note. `biblical_reference` accepts a chapter, verse, or verse range (`Luke 21`,
 `Luke 21:5`, `Luke 21:5-6`) and filters to editorial links: curated
-narrative-overlap links (33 for Josephus), each checked against the linked
-passage text, and one "Translation of" link per targum verse, derived from its
-verse key (`biblical_reference="Deuteronomy 32:8"` with `corpus="targum"` finds
-both targums of that verse). Period tags,
+narrative-overlap links (33 for Josephus, 6 for the rabbinic corpus), each
+checked against the linked passage text, and one "Translation of" link per
+targum verse, derived from its verse key (`biblical_reference="Deuteronomy 32:8"`
+with `corpus="targum"` finds both targums of that verse). Period tags,
 biblical links, and editorial chapter headings (Whiston's, for Josephus) are
 labelled editorial metadata; they are not presented as claims made by the
 ancient author. Empty results say whether the corpus is missing, the reference
@@ -313,6 +318,15 @@ and `4 Ezra 11:1` are the same passage; 2 Esdras 1–2 and 15–16 (5 and 6 Ezra
 are not included. 4 Ezra is cited in modern (Bensly) numbering: the KJV and
 Clementine Latin lack the "missing fragment" 7:36–105, so their 7:36–70 is
 4 Ezra 7:106–140, shown as e.g. `4 Ezra 7:106 (KJV 2 Esdras 7:36)`.
+For the rabbinic corpus: Mishnah and Tosefta tractates take
+`chapter:mishnah`/`chapter:halakhah` behind a collection prefix (`Mishnah`/`m.`,
+`Tosefta`/`t.`; e.g. `m. Shek. 1:1`, `Tosefta Menahot 13:4`); Babylonian Talmud
+tractates take `daf+amud` with an optional Sefaria segment (`Bava Batra 3b-4a`,
+`Pes. 57a:8`, `b. Sanh. 43a`); `Leviticus Rabbah`/`Lev. Rab.`/`Vayikra Rabbah`
+takes `chapter:section`. Tractate names follow Sefaria (`Menachot`,
+`Pesachim`) with SBL abbreviations and common spellings as aliases (`Menahot`,
+`Men.`, `Pesah.`, `B. Bat.`); apostrophe forms such as `Ta'anit` are not
+matched, so use `Taanit`.
 
 ```text
 lookup_ancient_source(citation="Ant. 15.320")            # inside Antiquities 15.317–322
@@ -326,13 +340,15 @@ lookup_ancient_source(citation="Philo, Legat. 299")
 lookup_ancient_source(citation="Leg. 1.31")
 lookup_ancient_source(citation="1 Enoch 89:73")
 lookup_ancient_source(citation="2 Esdras 11:1")          # = 4 Ezra 11:1
+lookup_ancient_source(citation="Bava Batra 3b-4a")      # 4 passages, 3b:1–9 to 4a:10–17
+lookup_ancient_source(citation="Tosefta Menahot 13:22") # Zuckermandel numbering: Vilna 13:4
 ```
 
 A locator inside a longer passage returns the passage containing it; a range
 returns every overlapping passage in citation order, at most 10, with a note
 when more exist. Each passage shows its corpus, work, citation, edition,
 translation, license, source, and curated biblical links. When registered
-works share a title (as the planned rabbinic collections will), a collection
+works share a title (as the rabbinic collections do), a collection
 prefix such as `Mishnah` or `Bavli`, or the locator grammar itself (a daf such
 as `3b` fits only a Talmud tractate), selects one.
 Unknown works list the supported works, ambiguous citations list the
@@ -980,7 +996,8 @@ studybible-mcp/
 │   │   ├── citations.py       # Citation-to-work resolution
 │   │   ├── download.py        # Checksum-verified download helpers
 │   │   ├── josephus.py        # Josephus TEI parser, works, and links
-│   │   └── targum.py          # Onkelos and Pseudo-Jonathan Sefaria files, verse keys
+│   │   ├── targum.py          # Onkelos and Pseudo-Jonathan Sefaria files, verse keys
+│   │   └── rabbinic.py        # Mishnah, Tosefta, Bavli, Leviticus Rabbah (Sefaria, Wikisource)
 │   └── parsers/
 │       ├── lexicon.py         # TFLSJ, BDB, Abbott-Smith, TBESG, TBESH parsers
 │       ├── aquifer.py         # BibleAquifer JSON parser
@@ -1266,6 +1283,58 @@ retellings and shared imagery, e.g. the Animal Apocalypse (1 Enoch 89) with the
 Genesis–Kings narrative and Malachi 1:7, 1 Enoch 1:9 with Jude 14–15, and the
 eagle vision (4 Ezra 11–12) with Daniel 7, which 4 Ezra 12:11 names.
 
+### Rabbinic texts
+
+The `rabbinic` corpus comes from Sefaria's JSON export, pinned to commit
+`3f1013631fdfe452e953a93a2c5f921319e394ed` of
+[Sefaria/Sefaria-Export-Archive](https://github.com/Sefaria/Sefaria-Export-Archive)
+(the last full export committed before Sefaria moved it to a GCS bucket that
+is overwritten monthly and not versioned) and verified by Git blob hash, plus
+330 Hebrew Wikisource pages pinned by revision id and SHA-1. Every Sefaria
+version declares its own licence; downloads and imports reject any version
+that is not Public Domain, CC0, CC-BY or CC-BY-NC. CC-BY and CC-BY-NC are
+recorded as CC BY 3.0 and CC BY-NC 4.0, the licences Sefaria's reader links
+them to.
+
+- **Mishnah**, all 63 tractates, one passage per mishnah (`Mishnah Shekalim
+  1:1`): Hebrew *Mishnah, ed. Romm, Vilna 1913* (public domain) with Joshua
+  Kulp's *Mishnah Yomit* English (CC BY). Bikkurim chapter 4, absent from the
+  Vilna version, is English only.
+- **Tosefta**, all 61 tractates of Sefaria's Vilna edition (Kelim in three
+  parts), one passage per halakhah, Hebrew from Machon Mamre (public domain;
+  Tahorot from Sefaria's public-domain *Tosefta Tohorot* copy). The *Sefaria
+  Community Translation* (CC0) supplies English for 2,133 halakhot; the other
+  1,929 are Hebrew only, as no openly licensed English exists. Vilna Menahot 13
+  has four halakhot; Zuckermandel's 13:18–23 (the high-priestly houses and
+  R. Yohanan ben Torta on the fall of Shiloh and the Temples) all lie in Vilna
+  13:4, which carries that alternate reference, and `Tosefta Menahot 13:18`
+  to `13:23` resolve to it (concordance from the ERC project
+  [Judaism and Rome](https://www.judaism-and-rome.org/tosefta-menahot-1321-23),
+  checked against the text).
+- **Babylonian Talmud**, William Davidson (Koren Noé) Aramaic and English,
+  both CC BY-NC 4.0. One passage per amud; an amud longer than 7,500
+  characters is cut into Sefaria segment ranges (`Bava Batra 3b:1–9`,
+  `3b:10–16`) so lookup shows each in full, and `Bava Batra 3b` returns all of
+  them. Where the Aramaic and English segment counts differ (96 amudim),
+  segments are paired by length before cutting. The whole Bavli would add
+  169 MB to the database, so 16 tractates (71 MB) are imported: Berakhot,
+  Shabbat, Pesachim, Yoma, Sukkah, Rosh Hashanah, Taanit, Megillah, Chagigah,
+  Sotah, Gittin, Bava Batra, Sanhedrin, Makkot, Avodah Zarah and Tamid. The
+  English transliterates בית בייתוס as "house of Baitos": search `Baitos` or
+  `בייתוס`, not `Boethus`, to find Pesachim 57a.
+- **Leviticus Rabbah**, one passage per chapter:section: Hebrew from
+  [Hebrew Wikisource](https://he.wikisource.org/wiki/ויקרא_רבה) (CC BY-SA 4.0)
+  with *The Sefaria Midrash Rabbah, 2022* English (CC BY). Wikisource's
+  quotation templates keep the quoted verse; notes, source citations and
+  navigation are dropped, and an unknown template fails the import.
+
+Footnotes, footnote markers and HTML are removed from the English. Two
+unclosed footnotes in the Leviticus Rabbah English and two unclosed Wikisource
+templates are corrected in the parser, each checked to still apply. Curated
+links: Mishnah Shekalim 1:1 and 1:3 to Matthew 17:24–27 (the half-shekel),
+Bava Batra 4a to John 2:20, Mark 13:1 and Luke 21:5 (Herod's rebuilding and
+its stones), and Pesachim 57a to Acts 4:6 (the high-priestly families).
+
 ### BDB Hebrew Lexicon
 
 The full unabridged Brown-Driver-Briggs Hebrew lexicon (8,090 entries) comes from [eliranwong/unabridged-BDB-Hebrew-lexicon](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon). The BDB is the standard scholarly Hebrew-English lexicon, originally published in 1906 and still widely used in academic study. Public domain text.
@@ -1384,6 +1453,7 @@ The targum Aramaic (Torat Emet) and Etheridge's English are public domain as dec
 The ETCBC/dss Dead Sea Scrolls transcription (Abegg, Bowley and Cook) is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/); the Hebrew Wikisource Pesher Habakkuk text is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 The First1KGreek Philo Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); Cohn–Wendland's Greek and Yonge's English are public domain.
 Charles's 1 Enoch (via English Wikisource) and the KJV 2 Esdras (via eBible.org) are public domain; the Latin Wikisource transcription of the Clementine 4 Esdras is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+Rabbinic texts carry each version's licence on every passage: the William Davidson Talmud (Aramaic and English) is [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) and may not be used commercially; Kulp's Mishnah Yomit and The Sefaria Midrash Rabbah English are CC BY; Hebrew Wikisource's Leviticus Rabbah is [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); the Sefaria Community Translation is CC0; the Vilna Mishnah and Machon Mamre Tosefta are public domain.
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -1403,6 +1473,7 @@ The theology and ANE entries are original summary prose written for this project
 - [Open Greek and Latin / First1KGreek](https://github.com/OpenGreekAndLatin/First1KGreek) for the licensed Philo Greek and English editions
 - [Wikisource](https://en.wikisource.org/wiki/The_Book_of_Enoch_(Charles)) contributors for R. H. Charles's 1 Enoch and the [Latin Clementine Vulgate](https://la.wikisource.org/wiki/Vulgata_Clementina) 4 Esdras
 - [eBible.org](https://ebible.org/find/show.php?id=eng-kjv) for the public-domain KJV with Apocrypha
+- [Sefaria](https://www.sefaria.org/) for the Mishnah, Tosefta, William Davidson Talmud and Midrash Rabbah texts, and [Hebrew Wikisource](https://he.wikisource.org/) for the Hebrew of Leviticus Rabbah
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition

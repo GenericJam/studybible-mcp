@@ -2,6 +2,31 @@
 
 ---
 
+## Rabbinic ancient source
+
+- Added the `rabbinic` corpus (12,212 passages): the Mishnah (63 tractates,
+  Vilna 1913 Hebrew with Kulp's *Mishnah Yomit* English), the Tosefta (61
+  tractates, Vilna numbering, Machon Mamre Hebrew with Sefaria Community
+  English for 2,133 halakhot and Hebrew only for the rest), 16 Babylonian
+  Talmud tractates (William Davidson Aramaic and English, CC BY-NC 4.0), and
+  Leviticus Rabbah (Hebrew Wikisource with The Sefaria Midrash Rabbah
+  English). Every passage carries its versions' licences.
+- Sefaria files are pinned to a commit of Sefaria-Export-Archive and verified
+  by Git blob hash; Wikisource pages are pinned by revision id and SHA-1.
+  Versions without an open licence are rejected.
+- Citations: `Mishnah Shekalim 1:1`, `m. Shek. 1:1`, `Tosefta Menahot 13:4`,
+  `Bava Batra 3b-4a`, `Pes. 57a:8`, `Leviticus Rabbah 3:5`. Talmud passages are
+  amudim, with long amudim cut into Sefaria segment ranges (`Bava Batra
+  3b:1–9`); a daf citation returns them all. `Tosefta Menahot 13:18`–`13:23`
+  (Zuckermandel) resolve to Vilna 13:4.
+- The whole Bavli would add 169 MB to the database; the 16 most-cited
+  tractates add 71 MB (107 MB for the corpus).
+- Six curated biblical links: Mishnah Shekalim 1:1 and 1:3 (Matthew
+  17:24–27), Bava Batra 4a (John 2:20, Mark 13:1, Luke 21:5), Pesachim 57a
+  (Acts 4:6).
+
+---
+
 ## Philo ancient source
 
 - Added the `philo` corpus: all 31 Greek treatises of Philo of Alexandria
