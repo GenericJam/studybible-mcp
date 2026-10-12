@@ -205,6 +205,15 @@ async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
                 f"Torah hypothesis.*"
             )
 
+    # Hint: a catalogued manuscript-variant case for this exact verse.
+    variant_case_keys = await db.get_textual_variant_case_keys(reference)
+    if variant_case_keys:
+        result += (
+            f"\n\n---\n*Textual variant catalogued for this verse "
+            f"({', '.join(variant_case_keys)}): readings, witnesses, and "
+            f"attributed analysis via `get_textual_variant` (reference='{reference}').*"
+        )
+
     # Hint: NT↔OT LXX-form quotation. Surfaces in both directions — looking up
     # the OT verse mentions the NT quotation, while looking up the NT verse
     # mentions the OT source.
@@ -1192,11 +1201,34 @@ async def handle_get_torah_weave(args: dict[str, Any]) -> list[TextContent]:
     return text(result)
 
 
+_SINGLE_VERSE_REFERENCE = re.compile(r"^[1-3]?[A-Za-z]{2,3}\.\d+\.\d+[a-z]?$")
+
+
 async def handle_get_textual_variant(args: dict[str, Any]) -> list[TextContent]:
     """Return textual evidence and separately attributed interpretive layers."""
-    reference = args.get("reference", "")
+    reference = args.get("reference", "").strip()
     if not reference:
         return text("Please provide a verse reference (OT or NT).")
+
+    status = await db.textual_variant_schema_status()
+    if status != "ready":
+        reason = {
+            "legacy": "still uses the legacy textual-variant schema",
+            "missing": "has no textual-variant tables",
+            "empty": "has no textual-variant cases loaded",
+        }[status]
+        return text(
+            f"Textual-variant data is unavailable: this database {reason}. "
+            "Run `python scripts/upgrade_database.py` to migrate it and import "
+            "the bundled variant cases."
+        )
+
+    normalized = db._normalize_reference(reference)
+    if not _SINGLE_VERSE_REFERENCE.match(normalized):
+        return text(
+            f"'{reference}' is not a single-verse reference. get_textual_variant "
+            "takes one verse, e.g. 'Deuteronomy 32:8' or 'Hebrews 10:5'."
+        )
 
     hints = await db.get_nt_ot_lxx_quote_hints(reference)
     cases = await db.get_textual_variant_cases(reference)
@@ -1213,7 +1245,8 @@ async def handle_get_textual_variant(args: dict[str, Any]) -> list[TextContent]:
 
     if not hints and not cases:
         return text(
-            f"No textual-variant or LXX-quotation data on file for {reference}."
+            f"No textual-variant case or NT quotation alignment is catalogued "
+            f"for {reference}."
         )
 
     return text(format_textual_variant_cases(reference, cases, hints))

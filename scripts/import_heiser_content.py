@@ -10,6 +10,7 @@ Usage: python scripts/import_heiser_content.py [db_path]
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -104,6 +105,72 @@ def import_content_file(conn: sqlite3.Connection, filepath: Path) -> tuple[int, 
 
 NON_VARIANT_CATEGORIES = frozenset({"MT_preserved", "translation_choice"})
 
+# Explicit mapping from the dataset's raw ``reading_support`` label to
+# (reading the evidence bears on, evidence type). ``None`` means the evidence
+# belongs to the case as a whole rather than to one reading.
+#
+# - supports_long_form / omits / supports_short_form_pattern only occur in
+#   omission cases, where the MT carries the long form and the variant is the
+#   omission (enforced in ``_classify_witness``).
+# - supports_short_form_pattern marks a scroll that attests the short text form
+#   elsewhere in the book: indirect evidence, not a witness to this verse.
+# - not_preserved records that a corpus has no copy of the verse at all.
+READING_SUPPORT_MAP: dict[str, tuple[str | None, str]] = {
+    "supports_mt": ("mt", "manuscript"),
+    "supports_variant": ("variant", "manuscript"),
+    "supports_long_form": ("mt", "manuscript"),
+    "omits": ("variant", "manuscript"),
+    "supports_short_form_pattern": ("variant", "indirect"),
+    "not_preserved": (None, "not_preserved"),
+}
+_FORM_SUPPORT_LABELS = frozenset(
+    {"supports_long_form", "omits", "supports_short_form_pattern"}
+)
+
+# A witness labelled with an NT passage ("Hebrews 10:5-7", "Luke 4:18 (Jesus)")
+# is citation evidence: it shows how the verse was quoted, not a copy of it.
+NT_BOOK_NAMES = frozenset({
+    "matthew", "mark", "luke", "john", "acts", "romans",
+    "1 corinthians", "2 corinthians", "galatians", "ephesians", "philippians",
+    "colossians", "1 thessalonians", "2 thessalonians", "1 timothy",
+    "2 timothy", "titus", "philemon", "hebrews", "james", "1 peter",
+    "2 peter", "1 john", "2 john", "3 john", "jude", "revelation",
+})
+_CITATION_PATTERN = re.compile(r"^((?:[123] )?[A-Za-z]+) \d+:\d+")
+
+
+def _is_nt_citation(witness: str) -> bool:
+    match = _CITATION_PATTERN.match(witness.strip())
+    return bool(match) and match.group(1).lower() in NT_BOOK_NAMES
+
+
+def _classify_witness(case_key: str, witness: dict) -> tuple[str | None, str]:
+    """Return (reading_key, evidence_type) for one dataset witness entry."""
+    support = witness.get("reading_support")
+    if support not in READING_SUPPORT_MAP:
+        raise ValueError(
+            f"Unknown reading_support {support!r} for witness "
+            f"{witness.get('manuscript')!r}; add it to READING_SUPPORT_MAP"
+        )
+    if support in _FORM_SUPPORT_LABELS and not case_key.endswith("_omission"):
+        raise ValueError(
+            f"reading_support {support!r} is only defined for omission cases, "
+            f"not {case_key!r}"
+        )
+    if not witness.get("manuscript"):
+        raise ValueError("Witness entry has no manuscript name")
+    reading_key, evidence_type = READING_SUPPORT_MAP[support]
+    if evidence_type == "manuscript" and _is_nt_citation(witness["manuscript"]):
+        evidence_type = "citation"
+    return reading_key, evidence_type
+
+
+def _parse_variant_reference(reference: str) -> tuple[str, int, int]:
+    parts = reference.split(".")
+    if len(parts) != 3 or not parts[0]:
+        raise ValueError(f"Variant reference {reference!r} is not Book.Chapter.Verse")
+    return parts[0], int(parts[1]), int(parts[2])
+
 
 def import_textual_variant_record(
     conn: sqlite3.Connection,
@@ -114,17 +181,55 @@ def import_textual_variant_record(
     The legacy dataset also contains interpretation-only records labelled
     ``MT_preserved`` or ``translation_choice``. Those are not manuscript
     variants and are deliberately excluded from this tool's data model.
+
+    The record is validated completely before any row is touched, and the
+    replacement runs inside a SAVEPOINT, so a malformed record raises and
+    leaves the previously imported rows for the case intact.
     """
     case_key = variant["variant_source"]
     if case_key in NON_VARIANT_CATEGORIES:
         return None
 
     reference = variant["reference"]
-    parts = reference.split(".")
-    book = parts[0] if parts else ""
-    chapter = int(parts[1]) if len(parts) > 1 else None
-    verse = int(parts[2]) if len(parts) > 2 else None
+    book, chapter, verse = _parse_variant_reference(reference)
+    readings = (
+        ("mt", "Masoretic Text", variant["mt_reading"], variant.get("mt_hebrew")),
+        (
+            "variant",
+            case_key,
+            variant["variant_reading"],
+            variant.get("variant_original"),
+        ),
+    )
+    for reading_key, _, reading_text, _ in readings:
+        if not reading_text:
+            raise ValueError(f"{reference} {case_key}: empty {reading_key} reading")
+    witnesses = [
+        (witness, *_classify_witness(case_key, witness))
+        for witness in variant.get("witnesses", [])
+    ]
 
+    conn.execute("SAVEPOINT textual_variant_record")
+    try:
+        case_id = _write_textual_variant_record(
+            conn, variant, (reference, book, chapter, verse, case_key), readings, witnesses
+        )
+    except BaseException:
+        conn.execute("ROLLBACK TO textual_variant_record")
+        conn.execute("RELEASE textual_variant_record")
+        raise
+    conn.execute("RELEASE textual_variant_record")
+    return case_id
+
+
+def _write_textual_variant_record(
+    conn: sqlite3.Connection,
+    variant: dict,
+    case_row: tuple[str, str, int, int, str],
+    readings: tuple,
+    witnesses: list[tuple[dict, str | None, str]],
+) -> int:
+    reference, _, _, _, case_key = case_row
     conn.execute(
         """INSERT INTO textual_variant_cases
            (reference, book, chapter, verse, case_key, significance)
@@ -134,14 +239,7 @@ def import_textual_variant_record(
                chapter = excluded.chapter,
                verse = excluded.verse,
                significance = excluded.significance""",
-        (
-            reference,
-            book,
-            chapter,
-            verse,
-            case_key,
-            variant.get("variant_significance"),
-        ),
+        (*case_row, variant.get("variant_significance")),
     )
     case_id = conn.execute(
         """SELECT id FROM textual_variant_cases
@@ -149,14 +247,8 @@ def import_textual_variant_record(
         (reference, case_key),
     ).fetchone()[0]
 
-    conn.execute(
-        """DELETE FROM textual_variant_witnesses
-           WHERE reading_id IN (
-               SELECT id FROM textual_variant_readings WHERE case_id = ?
-           )""",
-        (case_id,),
-    )
     for table in (
+        "textual_variant_witnesses",
         "textual_variant_readings",
         "textual_critical_judgments",
         "textual_theological_interpretations",
@@ -166,20 +258,6 @@ def import_textual_variant_record(
         conn.execute(f"DELETE FROM {table} WHERE case_id = ?", (case_id,))
 
     reading_ids: dict[str, int] = {}
-    readings = (
-        (
-            "mt",
-            "Masoretic Text",
-            variant["mt_reading"],
-            variant.get("mt_hebrew"),
-        ),
-        (
-            "variant",
-            case_key,
-            variant["variant_reading"],
-            variant.get("variant_original"),
-        ),
-    )
     for reading_key, tradition, reading_text, original_text in readings:
         cursor = conn.execute(
             """INSERT INTO textual_variant_readings
@@ -189,21 +267,24 @@ def import_textual_variant_record(
         )
         reading_ids[reading_key] = cursor.lastrowid
 
-    for witness in variant.get("witnesses", []):
-        reading_key = (
-            "mt" if witness.get("reading_support") == "supports_mt" else "variant"
-        )
+    for witness, reading_key, evidence_type in witnesses:
         conn.execute(
             """INSERT INTO textual_variant_witnesses
-               (reading_id, witness, approximate_date)
-               VALUES (?, ?, ?)""",
+               (case_id, reading_id, witness, evidence_type, reading_support,
+                approximate_date)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (
-                reading_ids[reading_key],
+                case_id,
+                reading_ids[reading_key] if reading_key else None,
                 witness["manuscript"],
-                witness.get("manuscript_date"),
+                evidence_type,
+                witness["reading_support"],
+                witness.get("manuscript_date") or None,
             ),
         )
 
+    # The dataset's consensus text carries no source citation, so it is stored
+    # without one; the API presents uncited judgments as unsourced summaries.
     if variant.get("scholarly_consensus"):
         conn.execute(
             """INSERT INTO textual_critical_judgments
@@ -241,8 +322,15 @@ def import_textual_variant_record(
 
 
 def import_textual_variants(conn: sqlite3.Connection, variants_dir: Path) -> int:
-    """Import genuine manuscript variants from the legacy JSON dataset."""
+    """Import genuine manuscript variants from the bundled JSON dataset.
+
+    Each record is replaced atomically. A malformed record is rolled back (its
+    previously imported rows stay intact), the remaining records are imported
+    and committed, and a ``ValueError`` naming every failed record is raised
+    so the problem cannot pass silently.
+    """
     count = 0
+    failures: list[str] = []
     for filepath in sorted(variants_dir.glob("*.json")):
         with open(filepath, encoding="utf-8") as file:
             data = json.load(file)
@@ -251,12 +339,15 @@ def import_textual_variants(conn: sqlite3.Connection, variants_dir: Path) -> int
                 if import_textual_variant_record(conn, variant) is not None:
                     count += 1
             except (KeyError, TypeError, ValueError, sqlite3.Error) as error:
-                print(
-                    f"  Warning: Failed to insert variant for "
-                    f"{variant.get('reference', '?')}: {error}"
+                failures.append(
+                    f"{filepath.name} {variant.get('reference', '?')}: {error!r}"
                 )
 
     conn.commit()
+    if failures:
+        raise ValueError(
+            "Textual-variant records not imported: " + "; ".join(failures)
+        )
     return count
 
 

@@ -24,7 +24,12 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
 
 
 def migrate(conn: sqlite3.Connection) -> tuple[int, int, int]:
-    """Migrate legacy rows; return (cases, skipped_nonvariants, quotation_hints)."""
+    """Migrate legacy rows; return (cases, skipped_nonvariants, quotation_hints).
+
+    Runs in one transaction: any invalid legacy record (for example a witness
+    whose ``reading_support`` label has no evidence-type mapping) raises and
+    rolls the whole migration back, leaving the legacy tables in place.
+    """
     if not _table_exists(conn, "textual_variants"):
         create_schema(conn)
         return (0, 0, 0)

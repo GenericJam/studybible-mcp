@@ -1797,8 +1797,47 @@ class StudyBibleDB:
         return rows
 
 
+    async def textual_variant_schema_status(self) -> str:
+        """Classify the textual-variant tables: legacy, missing, empty, or ready.
+
+        ``legacy`` means the old mixed ``textual_variants`` table is still present
+        (``create_schema`` may have added empty new tables beside it), so the
+        database must be migrated before the new tables can be trusted.
+        """
+        tables = {
+            row["name"]
+            for row in await self._fetchall(
+                """SELECT name FROM sqlite_master WHERE type = 'table'
+                   AND name IN ('textual_variants', 'textual_variant_cases')"""
+            )
+        }
+        if "textual_variants" in tables:
+            return "legacy"
+        if "textual_variant_cases" not in tables:
+            return "missing"
+        if not await self._table_has_rows("textual_variant_cases"):
+            return "empty"
+        return "ready"
+
+    async def get_textual_variant_case_keys(self, reference: str) -> list[str]:
+        """Return case keys catalogued for a verse; empty if the table is absent."""
+        if not await self._table_has_rows("textual_variant_cases"):
+            return []
+        rows = await self._fetchall(
+            "SELECT case_key FROM textual_variant_cases WHERE reference = ? ORDER BY id",
+            (self._normalize_reference(reference),),
+        )
+        return [row["case_key"] for row in rows]
+
     async def get_textual_variant_cases(self, reference: str) -> list[dict]:
-        """Get textual variant cases with each kind of claim kept separate."""
+        """Get textual variant cases with each kind of claim kept separate.
+
+        Witness rows are split by evidence type: manuscript witnesses stay on
+        the reading they support, while NT citations, indirect evidence, and
+        "not preserved" notes are returned as separate case-level lists.
+        Critical judgments without a source citation are returned as
+        ``unsourced_summaries`` rather than ``critical_judgments``.
+        """
         normalized = self._normalize_reference(reference)
         cases = await self._fetchall(
             "SELECT * FROM textual_variant_cases WHERE reference = ? ORDER BY id",
@@ -1811,20 +1850,46 @@ class StudyBibleDB:
                    WHERE case_id = ? ORDER BY id""",
                 (case_id,),
             )
+            readings_by_id = {reading["id"]: reading for reading in readings}
             for reading in readings:
-                reading["witnesses"] = await self._fetchall(
-                    """SELECT witness, approximate_date, source_citation, source_url
-                       FROM textual_variant_witnesses
-                       WHERE reading_id = ? ORDER BY id""",
-                    (reading["id"],),
-                )
+                reading["witnesses"] = []
+            case["citation_evidence"] = []
+            case["indirect_evidence"] = []
+            case["not_preserved_in"] = []
+            witnesses = await self._fetchall(
+                """SELECT reading_id, witness, evidence_type, reading_support,
+                          approximate_date, source_citation, source_url
+                   FROM textual_variant_witnesses
+                   WHERE case_id = ? ORDER BY id""",
+                (case_id,),
+            )
+            for witness in witnesses:
+                reading = readings_by_id.get(witness["reading_id"])
+                if reading is not None:
+                    witness["reading_key"] = reading["reading_key"]
+                    witness["tradition"] = reading["tradition"]
+                evidence_type = witness["evidence_type"]
+                if evidence_type == "manuscript":
+                    reading["witnesses"].append(witness)
+                elif evidence_type == "citation":
+                    case["citation_evidence"].append(witness)
+                elif evidence_type == "indirect":
+                    case["indirect_evidence"].append(witness)
+                else:
+                    case["not_preserved_in"].append(witness)
             case["manuscript_evidence"] = readings
-            case["critical_judgments"] = await self._fetchall(
+            judgments = await self._fetchall(
                 """SELECT judgment, attribution, source_citation, source_url
                    FROM textual_critical_judgments
                    WHERE case_id = ? ORDER BY id""",
                 (case_id,),
             )
+            case["critical_judgments"] = [
+                judgment for judgment in judgments if judgment.get("source_citation")
+            ]
+            case["unsourced_summaries"] = [
+                judgment for judgment in judgments if not judgment.get("source_citation")
+            ]
             case["theological_interpretations"] = await self._fetchall(
                 """SELECT interpretation, attribution, source_citation, source_url
                    FROM textual_theological_interpretations
@@ -2462,15 +2527,28 @@ def create_schema(conn: sqlite3.Connection):
             UNIQUE(case_id, reading_key)
         );
 
+        -- One row per piece of evidence. evidence_type separates manuscript
+        -- witnesses from NT citations, indirect evidence (e.g. a scroll attesting
+        -- a text form elsewhere in the book), and "not preserved" notes, which
+        -- belong to the case rather than to any reading. reading_support keeps
+        -- the raw dataset label the classification was derived from.
         CREATE TABLE IF NOT EXISTS textual_variant_witnesses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            reading_id INTEGER NOT NULL REFERENCES textual_variant_readings(id) ON DELETE CASCADE,
+            case_id INTEGER NOT NULL REFERENCES textual_variant_cases(id) ON DELETE CASCADE,
+            reading_id INTEGER REFERENCES textual_variant_readings(id) ON DELETE CASCADE,
             witness TEXT NOT NULL,
+            evidence_type TEXT NOT NULL CHECK (
+                evidence_type IN ('manuscript', 'citation', 'indirect', 'not_preserved')
+            ),
+            reading_support TEXT NOT NULL,
             approximate_date TEXT,
             source_citation TEXT,
             source_url TEXT,
-            UNIQUE(reading_id, witness)
+            CHECK ((evidence_type = 'not_preserved') = (reading_id IS NULL)),
+            UNIQUE(case_id, witness)
         );
+        CREATE INDEX IF NOT EXISTS idx_tvw_case ON textual_variant_witnesses(case_id);
+        CREATE INDEX IF NOT EXISTS idx_tvw_reading ON textual_variant_witnesses(reading_id);
 
         CREATE TABLE IF NOT EXISTS textual_critical_judgments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

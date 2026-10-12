@@ -26,6 +26,7 @@ emitted as a Mermaid code block within that text.
 """
 
 import json
+import re
 
 from mcp.types import Tool, ToolAnnotations
 
@@ -985,28 +986,33 @@ Only Torah books (Genesis through Deuteronomy) have weave data. Source: Moshe Kl
         description="""Retrieve a textual-variant record without conflating evidence and interpretation.
 
 WHAT IT RETURNS for a given verse reference:
-- Manuscript evidence: distinct readings and the witnesses attached to each reading
-- Critical judgments: editorial or scholarly conclusions, with attribution and citation when available
+- Manuscript evidence: distinct readings and the manuscript witnesses attached to each reading
+- NT citation evidence: New Testament quotations of the verse, kept apart from manuscript copies
+- Indirect evidence: material bearing on a reading's text form without witnessing this verse (e.g. a scroll attesting a short edition elsewhere in the book)
+- Not preserved in: corpora with no surviving copy of the verse (e.g. no Dead Sea Scroll)
+- Critical judgments: text-critical conclusions that carry a source citation
+- Unsourced dataset summary: uncited editorial summaries, labelled as not verified against published text-critical scholarship
 - Theological interpretations: explicitly labelled interpretations, never presented as manuscript evidence
 - Author-specific claims: named-author arguments, separate from critical judgments
 - Translation decisions: a translation's selected reading and rationale
 - NT quotation alignment: separately catalogued links where an NT quotation follows an LXX form
 
-The sections remain separate even when one has no catalogued data. A witness
-date describes the witness record; it does not by itself date the underlying
-reading. Unsourced editorial summaries are labelled as such.
+Each witness keeps the dataset's raw support label. A witness date describes
+the witness record; it does not by itself date the underlying reading.
 
-Relevant where a New Testament quotation does not match the modern English Old
-Testament, and to questions about how the Hebrew, Greek, and Qumran textual
-traditions differ at a specific verse.
+Relevant where a New Testament quotation does not match the Old Testament verse
+it quotes (e.g. why Hebrews 10:5 says "a body you prepared" where Psalm 40:6 says
+"ears you have dug"), and to questions about how the Hebrew, Greek, and Qumran
+textual traditions differ at a specific verse.
 
-`lookup_verse` reports when a verse has a quotation hint or variant case.""",
+`lookup_verse` notes when a verse has a catalogued variant case or a quotation
+alignment.""",
         inputSchema={
             "type": "object",
             "properties": {
                 "reference": {
                     "type": "string",
-                    "description": "Bible reference — either the OT verse (e.g., 'Psalm 40:6', 'Deuteronomy 32:43', 'Isaiah 61:1') or the NT verse that quotes it (e.g., 'Hebrews 10:5', 'Hebrews 1:6', 'Luke 4:18'). Both sides return the same variant row."
+                    "description": "A single verse — either the OT verse (e.g., 'Psalm 40:6', 'Deuteronomy 32:43', 'Isaiah 61:1') or the NT verse that quotes it (e.g., 'Hebrews 10:5', 'Hebrews 1:6', 'Luke 4:18'). Both sides return the same variant case."
                 }
             },
             "required": ["reference"]
@@ -1396,6 +1402,25 @@ def _format_sourced_statement(item: dict, field: str, label: str) -> list[str]:
     return lines
 
 
+def _format_witness(witness: dict, note: str = "") -> list[str]:
+    """Format one evidence row, keeping the raw dataset support label visible."""
+    date = f" ({witness['approximate_date']})" if witness.get("approximate_date") else ""
+    line = f"- **{witness['witness']}**{date}"
+    if note:
+        line += f" — {note}"
+    if witness.get("reading_support"):
+        line += f" (dataset label: `{witness['reading_support']}`)"
+    lines = [line]
+    if witness.get("source_citation"):
+        lines.append(f"  - Citation: {witness['source_citation']}")
+    if witness.get("source_url"):
+        lines.append(f"  - Source: {witness['source_url']}")
+    return lines
+
+
+_NOT_PRESERVED_SUFFIX = re.compile(r"\s*\(none preserved\)\s*$", re.IGNORECASE)
+
+
 def format_textual_variant_cases(
     reference: str,
     cases: list[dict],
@@ -1423,18 +1448,50 @@ def format_textual_variant_cases(
                 lines.append(f"\n**Original-language text:** `{reading['original_text']}`")
             witnesses = reading.get("witnesses") or []
             if witnesses:
-                lines.append("\n**Witnesses supporting this reading:**")
+                lines.append("\n**Manuscript witnesses for this reading:**")
                 for witness in witnesses:
-                    date = (
-                        f" ({witness['approximate_date']})"
-                        if witness.get("approximate_date")
-                        else ""
+                    lines.extend(_format_witness(witness))
+
+        citations = case.get("citation_evidence") or []
+        if citations:
+            lines.extend(
+                [
+                    "",
+                    "### NT citation evidence",
+                    "*New Testament quotations show how the verse was cited; "
+                    "they are not manuscript copies of it.*",
+                ]
+            )
+            for witness in citations:
+                lines.extend(
+                    _format_witness(
+                        witness, f"quotes the {witness.get('tradition', '?')} reading"
                     )
-                    lines.append(f"- **{witness['witness']}**{date}")
-                    if witness.get("source_citation"):
-                        lines.append(f"  - Citation: {witness['source_citation']}")
-                    if witness.get("source_url"):
-                        lines.append(f"  - Source: {witness['source_url']}")
+                )
+
+        indirect = case.get("indirect_evidence") or []
+        if indirect:
+            lines.extend(
+                [
+                    "",
+                    "### Indirect evidence",
+                    "*Not a direct witness to this verse; bears on the text form "
+                    "behind a reading.*",
+                ]
+            )
+            for witness in indirect:
+                lines.extend(
+                    _format_witness(
+                        witness, f"bears on the {witness.get('tradition', '?')} reading"
+                    )
+                )
+
+        not_preserved = case.get("not_preserved_in") or []
+        if not_preserved:
+            names = ", ".join(
+                _NOT_PRESERVED_SUFFIX.sub("", witness["witness"]) for witness in not_preserved
+            )
+            lines.extend(["", f"**Not preserved in:** {names}"])
 
         lines.extend(["", "### Critical judgments"])
         judgments = case.get("critical_judgments") or []
@@ -1444,7 +1501,19 @@ def format_textual_variant_cases(
                     _format_sourced_statement(judgment, "judgment", "Attribution")
                 )
         else:
-            lines.append("*No critical judgment catalogued.*")
+            lines.append("*No sourced critical judgment catalogued.*")
+
+        summaries = case.get("unsourced_summaries") or []
+        if summaries:
+            lines.extend(
+                [
+                    "",
+                    "### Unsourced dataset summary (not verified against published "
+                    "text-critical scholarship)",
+                ]
+            )
+            for summary in summaries:
+                lines.append(f"- {summary['judgment']}")
 
         lines.extend(["", "### Theological interpretations"])
         interpretations = case.get("theological_interpretations") or []
