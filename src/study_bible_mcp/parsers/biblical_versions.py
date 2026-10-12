@@ -28,7 +28,7 @@ LXX_LICENSE = (
 LXX_TRANSLATION_LABEL = "Brenton English Septuagint translation"
 BRENTON_SOURCE_URL = "https://ebible.org/details.php?id=eng-Brenton"
 BRENTON_GREEK_SOURCE_URL = "https://ebible.org/details.php?id=grcbrent"
-# Shown with every row that carries Brenton's English.
+# Shown once in any comparison that includes Brenton's English.
 BRENTON_TRANSLATION_NOTE = (
     "Brenton (1844) translated his own Greek edition, which is based chiefly on Codex "
     "Vaticanus and is not the Rahlfs text shown, and his English sometimes departs even "
@@ -40,6 +40,12 @@ MT_LICENSE = "CC BY 4.0"
 MT_SOURCE_URL = "https://github.com/STEPBible/STEPBible-Data"
 MT_TRANSLATION_LABEL = "STEPBible word glosses (interlinear, not a translation)"
 MT_VERSIFICATION_METHOD = "TAHOT English/Hebrew versification"
+# OpenScriptorium's MT/LXX verse pairs, which the upstream README credits to TVTMS.
+VERSE_MAPPING_CREDIT = (
+    "MT/LXX verse pairs from OpenScriptorium lxx-morph, derived in part from TVTMS "
+    "(Tyndale Versification Traditions Mapping System), CC BY 4.0, created by "
+    "STEPBible.org / Tyndale House Cambridge"
+)
 
 # Field order of the compact per-word arrays stored in the morphology column.
 LXX_MORPHOLOGY_FIELDS = ("surface", "lemma", "parsing", "pos", "confidence", "source")

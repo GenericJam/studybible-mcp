@@ -181,9 +181,12 @@ compare_biblical_versions(
 )
 ```
 
-Every edition row includes its version, edition, language, canonical reference,
-edition reference, original text, English, license, and source URL, plus the
-versification mapping whenever it is not `identity`.
+Each edition row names its version, edition, and edition reference (plus the
+versification mapping whenever it is not `identity`), then its original text and
+English. Licences, source URLs, translation labels, the verse-mapping credit, and
+the Brenton caveat are listed once in a closing **Sources** block rather than on
+every row. A call returns at most 10 verses; a longer range or chapter is cut
+there with a note naming the verse to continue from.
 
 - **MT** comes from the STEPBible TAHOT verses already in the database (Westminster
   Leningrad Codex). Its English is STEPBible word glosses (interlinear, not a
@@ -919,7 +922,10 @@ The LXX comparison corpus uses the complete 59-book
 Rahlfs morphology dataset, pinned to commit
 `c91f6b1e8fb3ba37df701e6ae31f675ace71a2b2`. Its explicit
 `verse_pairs.jsonl` mapping resolves Psalm numbering, Jeremiah's chapter order,
-2 Esdras, and smaller MT/LXX shifts. Downloads are checked against the pinned
+2 Esdras, and smaller MT/LXX shifts. That mapping is derived in part from
+[TVTMS](https://github.com/STEPBible/STEPBible-Data) (Tyndale Versification
+Traditions Mapping System), CC BY 4.0, created by STEPBible.org / Tyndale House
+Cambridge. Downloads are checked against the pinned
 Git blob hashes. Morphology is CC BY 4.0; the underlying Rahlfs (1935) Greek
 text is public domain. Only the LXX rows are stored (about 35 MB including
 indexes, with word morphology zlib-compressed); MT rows are read from the
@@ -1030,7 +1036,7 @@ Contributions welcome! Especially:
 MIT License. See [LICENSE](LICENSE).
 
 Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-OpenScriptorium LXX morphology and MT/LXX verse mappings are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
+OpenScriptorium LXX morphology and MT/LXX verse mappings (derived in part from STEPBible's TVTMS) are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
 The Perseus Josephus Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
@@ -1043,6 +1049,7 @@ The theology and ANE entries are original summary prose written for this project
 
 - [STEPBible](https://www.stepbible.org/) for the freely available biblical data
 - [OpenScriptorium](https://github.com/OpenScriptorium/lxx-morph) for Rahlfs LXX morphology and explicit MT/LXX verse mappings
+- [STEPBible.org / Tyndale House Cambridge](https://github.com/STEPBible/STEPBible-Data) for TVTMS, the versification data behind those mappings
 - [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
 - [Perseus Digital Library](https://github.com/PerseusDL/canonical-greekLit) for the licensed Josephus Greek and English editions
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms

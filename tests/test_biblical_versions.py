@@ -345,7 +345,7 @@ async def test_unpaired_lxx_verses_are_not_mt_counterparts(tmp_path):
     ]
     assert "Αζαριας" not in output
     assert "Azarias" not in output
-    assert "Not available for this edition." in output
+    assert "**English:** not available for this edition." in output
     assert "like the Son of God." in output
     assert [row["edition_reference"] for row in canonical["lxx_only"]] == ["Dan.3.25", "Dan.3.25"]
     assert [row["canonical_reference"] for row in greek["rows"]] == [None, None]
@@ -533,11 +533,12 @@ async def test_flagged_row_shows_warning_and_brentons_greek(tmp_path):
     assert "**Warning: Brenton's English below translates a different Greek text.**" in output
     assert "word order differs (υἱοὶ ἄγγελοι)" in output
     assert (
-        "**Brenton's Greek (the text his English translates; https://ebible.org/details.php?id=grcbrent):** "
+        "**Brenton's Greek (the text his English translates):** "
         "προσκυνησάτωσαν αὐτῷ πάντες ἄγγελοι Θεοῦ" in output
     )
-    assert f"*Note: {BRENTON_TRANSLATION_NOTE}*" in output
-    assert output.index("Warning") < output.index("**English") < output.index("*Note:")
+    assert output.count(BRENTON_TRANSLATION_NOTE) == 1
+    assert f"*Brenton's English: {BRENTON_TRANSLATION_NOTE}*" in output
+    assert output.index("Warning") < output.index("**English") < output.index("*Brenton's English:")
     without_greek = format_biblical_version_comparison(
         "Deuteronomy 32:43", result["rows"], include_original=False
     )
@@ -560,7 +561,8 @@ async def test_matching_greek_shows_only_the_standing_note(tmp_path):
     assert row["brenton_greek_differs"] == 0
     assert "brenton_greek" not in row and "brenton_greek_difference" not in row
     assert "Warning" not in output and "Brenton's Greek (the text" not in output
-    assert f"*Note: {BRENTON_TRANSLATION_NOTE}*" in output
+    assert output.count(BRENTON_TRANSLATION_NOTE) == 1
+    assert f"*Brenton's English: {BRENTON_TRANSLATION_NOTE}*" in output
 
 
 async def test_rows_without_brenton_english_are_unchanged(tmp_path):
@@ -637,8 +639,12 @@ def test_comparison_formatter_honors_original_and_morphology_flags():
 
     assert "τοῦ κυρίου" not in compact
     assert "Morphology" not in compact
-    assert "**Canonical reference:** Psa.24.1" in compact
-    assert "**Edition reference:** Psa.23.1" in compact
+    assert "### Psa.24.1" in compact
+    assert "#### LXX Rahlfs Septuagint (1935) · Psa.23.1 (mapping: tvtms)" in compact
+    # Provenance is listed once, in the closing Sources block.
+    assert compact.count("https://example.test/lxx") == 1
+    assert "- LXX Rahlfs Septuagint (1935) (Greek): CC BY 4.0." in compact
+    assert "TVTMS (Tyndale Versification Traditions Mapping System)" in compact
     assert "τοῦ κυρίου" in detailed
     assert "κύριος; noun; masc gen sg" in detailed
 
@@ -651,7 +657,7 @@ def test_formatter_prints_non_identity_mapping_even_when_references_match():
         "mapping_method": "tvtms",
     }
 
-    assert "**Versification mapping:** tvtms" in format_biblical_version_comparison("Psalm 8:6", [row])
+    assert "· Psa.8.6 (mapping: tvtms)" in format_biblical_version_comparison("Psalm 8:6", [row])
 
 
 def _load_download_script():
@@ -723,3 +729,37 @@ def test_download_default_data_dir_is_project_relative():
     default = next(param.default for param in module.main.params if param.name == "data_dir")
 
     assert default == Path(module.__file__).resolve().parent.parent / "data" / "lxx"
+
+
+def _comparison_rows(count: int) -> list[dict]:
+    rows = []
+    for verse in range(1, count + 1):
+        for version in ("MT", "LXX"):
+            rows.append({
+                "version": version,
+                "canonical_reference": f"Psa.119.{verse}",
+                "canonical_chapter": 119,
+                "canonical_verse": verse,
+                "edition_reference": f"Psa.{119 if version == 'MT' else 118}.{verse}",
+            })
+    return rows
+
+
+def test_comparison_is_capped_and_names_where_to_continue():
+    from study_bible_mcp.server import MAX_COMPARISON_VERSES, _cap_comparison_rows
+
+    rows, note = _cap_comparison_rows("Psalm 119", _comparison_rows(176), "canonical")
+
+    assert len({row["canonical_reference"] for row in rows}) == MAX_COMPARISON_VERSES == 10
+    assert len(rows) == 20  # both versions of each kept verse
+    assert note == "Showing the first 10 of 176 verses. Continue from 'Psalm 119:11' in another call."
+
+    _, lxx_note = _cap_comparison_rows("Psalm 118", _comparison_rows(12), "lxx")
+    assert "Continue from Psa.118.11 (numbering='lxx')" in lxx_note
+
+
+def test_comparison_under_the_cap_is_unchanged():
+    from study_bible_mcp.server import _cap_comparison_rows
+
+    rows = _comparison_rows(8)
+    assert _cap_comparison_rows("1 Samuel 3:1-8", rows, "canonical") == (rows, "")
