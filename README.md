@@ -242,8 +242,15 @@ openly licensed): the Damascus Document (`CD 1:1–21`, Genizah MS A columns 1�
 and MS B columns 19–20), the Community Rule (`1QS`), and the Rule of the
 Congregation (`1QSa`) from the ETCBC/dss transcription, and Pesher Habakkuk
 (`1QpHab`) from Hebrew Wikisource, whose 32 curated links name the Habakkuk
-verses each lemma quotes. Each result names its corpus, work, and citation, and
-shows up to 1,500 characters of English around the first match and a shorter
+verses each lemma quotes. `philo` holds the 31 Greek treatises of Philo of Alexandria
+(Cohn–Wendland, via First1KGreek), one passage per Cohn–Wendland section with
+the same section of Yonge's English (7,901 passages; 58 sections of *Spec.* 1–2
+that Yonge's text lacks are Greek only). `pseudepigrapha` holds 1 Enoch in
+R. H. Charles's English, one passage per Charles verse, and 4 Ezra (2 Esdras
+3–14) in the KJV with the Clementine Latin, one passage per verse (1,679
+passages); both works are non-canonical and are labelled as attributed to
+Enoch or Ezra. Each result names its corpus, work, and citation, and shows up
+to 1,500 characters of English around the first match and a shorter
 original-language excerpt (match-centred when the query is in the original's
 script; a passage without openly licensed English shows its original instead);
 the edition, translation, license, and pinned source are listed once at the
@@ -296,6 +303,16 @@ between the two targums. For Qumran: `CD`/`Damascus Document`/`Zadokite Fragment
 `1QpHab`/`Pesher Habakkuk` take `column:line`, with Arabic or Roman column
 numbers (`CD 6:11`, `CD VI 11`, `1QpHab VII 1-5`); each returns the whole
 column containing the line, with the line numbers in the text.
+For Philo, SBL short titles, Latin titles, and English titles
+(`Opif.`/`De Opificio Mundi`/`On the Creation of the World`, `Legat.`/`Leg.
+Gai.`, `Her.`/`Heres`, ...) take a Cohn–Wendland section; the multi-book works
+`Leg.` 1–3, `Somn.` 1–2, `Mos.` 1–2, and `Spec.` 1–4 take `book.section`.
+`1 Enoch`/`1 En.` and `4 Ezra`/`2 Esdras`/`4 Esdras` take `chapter:verse`.
+4 Ezra 3–14 is 2 Esdras 3–14 with the same chapter numbers, so `2 Esdras 11:1`
+and `4 Ezra 11:1` are the same passage; 2 Esdras 1–2 and 15–16 (5 and 6 Ezra)
+are not included. 4 Ezra is cited in modern (Bensly) numbering: the KJV and
+Clementine Latin lack the "missing fragment" 7:36–105, so their 7:36–70 is
+4 Ezra 7:106–140, shown as e.g. `4 Ezra 7:106 (KJV 2 Esdras 7:36)`.
 
 ```text
 lookup_ancient_source(citation="Ant. 15.320")            # inside Antiquities 15.317–322
@@ -305,6 +322,10 @@ lookup_ancient_source(citation="Tg. Ps.-J. Deut 32:8")
 lookup_ancient_source(citation="Onkelos Genesis 1:1-3")
 lookup_ancient_source(citation="CD 6:11")               # inside CD 6:1–21 (CD-A)
 lookup_ancient_source(citation="1QpHab 7:4")
+lookup_ancient_source(citation="Philo, Legat. 299")
+lookup_ancient_source(citation="Leg. 1.31")
+lookup_ancient_source(citation="1 Enoch 89:73")
+lookup_ancient_source(citation="2 Esdras 11:1")          # = 4 Ezra 11:1
 ```
 
 A locator inside a longer passage returns the passage containing it; a range
@@ -1179,6 +1200,72 @@ in Charles's own chapter:verse numbering with no Schechter page and line
 references, and his chapter IX prints MSS A and B in parallel columns that the
 OCR interleaves line by line, so it cannot be aligned reliably with CD lines.
 
+### Philo
+
+The `philo` corpus uses the Greek (`grc1`, Cohn–Wendland–Reiter, *Philonis
+Alexandrini opera quae supersunt*, Berlin: Reimer 1896–1915) and English
+(`eng1`, C. D. Yonge, *The Works of Philo Judaeus*, London: Bohn 1854–55) TEI of
+all 31 treatises in
+[OpenGreekAndLatin/First1KGreek](https://github.com/OpenGreekAndLatin/First1KGreek)
+(`data/tlg0018/tlg001`–`tlg031`, *De Opificio Mundi* to *Legatio ad Gaium*),
+pinned to commit `03776b39f4047c5cff06f5296fae4b2bae4b08fb`. The module pins
+each file's Git blob hash and fetches it from that commit without GitHub API
+calls. The First1KGreek editors divided the English at the same Cohn–Wendland
+sections as the Greek, so each passage is exactly one section: its Greek and
+the English section of the same number, never a neighbouring one. The 58
+Greek sections of *Spec.* 1.177–193 and 2.124–213 that Yonge's shorter text
+lacks are imported as Greek-only passages; an English section without a Greek
+counterpart fails the import. Apparatus, marginal notes, page and line markers,
+and Yonge's footnotes and source references are kept out of the text; Yonge's
+treatise headings (e.g. "A TREATISE ON CIRCUMCISION." within *Spec.*) are
+editorial headings. Each file declares CC BY-SA 4.0, checked at download and
+parse. Works surviving only in Armenian or Latin (*QG*, *QE*, *Prov.*, *Anim.*),
+the *Hypothetica*, and fragments are not in First1KGreek and are not included.
+Twenty-five curated links name the Genesis or Exodus verse a section quotes and
+expounds (e.g. *Leg.* 1.31 → Gen 2:7) and *Legat.* 299 → Luke 3:1 (Pilate).
+Search for Philo's Greek uses Greek script (`λόγος`, `λογος`); a transliteration
+such as `logos` does not match, and Yonge renders λόγος as "word" or "reason".
+
+### Pseudepigrapha
+
+The `pseudepigrapha` corpus holds two non-canonical works. **1 Enoch** is R. H.
+Charles's translation (2nd ed. 1912, SPCK reprint 1917) from English Wikisource,
+one page per chapter (1–108), each pinned to a revision id and its SHA-1 and
+fetched in three MediaWiki API requests. The translation is in the public domain
+in the United States (Charles died in 1931; Wikisource `{{PD/US|1931}}`). Each
+passage is one Charles verse in his order, including his sub-verses and
+transpositions (`1 Enoch 5:6a–b`, `5:7c`, `5:6d–j`; `89:48b`; `91:14d`), all
+sorted under their verse number; Charles's section headings
+(`LXXXIX. 72-77. ...`) are editorial headings. Where Charles prints a parallel
+column with a header (his rendering of the Greek or Latin witnesses in chapters
+22, 27, 32, 89, and 106) only the main Ethiopic column is imported; the
+unheaded doublet columns of 90:13–18 are both text. No Ge'ez is included: the
+Beta maṣāḥǝft file (`LIT1340EnochE`) offers Dillmann's text only at chapter
+level under a custom non-commercial notice that must accompany every copy, and
+an EOTC printed-edition text whose own rights are not stated.
+
+**4 Ezra** is 2 Esdras 3–14 in the KJV with Apocrypha (eBible.org `eng-kjv`,
+public domain; the extracted `58-2ESeng-kjv.usfm` is pinned by SHA-256 because
+eBible regenerates its zip) paired with the Clementine Vulgate's *Liber Quartus
+Esdrae* (Rome 1598) from Latin Wikisource revision 148869 (transcribed from
+public-domain page images; Wikisource transcription CC BY-SA 4.0). Passages are
+one KJV verse with the Latin verse of the same number, except 28 spans where
+the two divide verses differently (usually a speech introduction such as "Et
+dixit ad me," / "And he said unto me" placed on the other side of a verse
+boundary, and an offset in 14:14–20); each span pairs all of its English with
+all of its Latin, and the import fails if any verse of either text is left
+unpaired. 4 Ezra 3–14 keeps the 2 Esdras chapter numbers; KJV 7:36–70 is
+cited as 7:106–140 (both texts lack the "missing fragment" 7:36–105, which is
+not available from an openly licensed source). 2 Esdras 1–2 and 15–16 are later
+Christian additions (5 and 6 Ezra) and are not included.
+
+Period tags give conventional composition dates (1 Enoch: Watchers,
+Astronomical Book, Dream Visions, and Epistle `hellenistic`, Parables `roman`;
+4 Ezra `roman`, after 70 CE). Twenty-two curated links mark allegorical
+retellings and shared imagery, e.g. the Animal Apocalypse (1 Enoch 89) with the
+Genesis–Kings narrative and Malachi 1:7, 1 Enoch 1:9 with Jude 14–15, and the
+eagle vision (4 Ezra 11–12) with Daniel 7, which 4 Ezra 12:11 names.
+
 ### BDB Hebrew Lexicon
 
 The full unabridged Brown-Driver-Briggs Hebrew lexicon (8,090 entries) comes from [eliranwong/unabridged-BDB-Hebrew-lexicon](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon). The BDB is the standard scholarly Hebrew-English lexicon, originally published in 1906 and still widely used in academic study. Public domain text.
@@ -1295,6 +1382,8 @@ OpenScriptorium LXX morphology and MT/LXX verse mappings (derived in part from S
 The Perseus Josephus Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 The targum Aramaic (Torat Emet) and Etheridge's English are public domain as declared by [Sefaria](https://www.sefaria.org/); the Metsudah Chumash English of Onkelos is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (non-commercial use only), and its licence is shown on every passage.
 The ETCBC/dss Dead Sea Scrolls transcription (Abegg, Bowley and Cook) is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/); the Hebrew Wikisource Pesher Habakkuk text is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+The First1KGreek Philo Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); Cohn–Wendland's Greek and Yonge's English are public domain.
+Charles's 1 Enoch (via English Wikisource) and the KJV 2 Esdras (via eBible.org) are public domain; the Latin Wikisource transcription of the Clementine 4 Esdras is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -1311,6 +1400,9 @@ The theology and ANE entries are original summary prose written for this project
 - [Perseus Digital Library](https://github.com/PerseusDL/canonical-greekLit) for the licensed Josephus Greek and English editions
 - [Sefaria](https://www.sefaria.org/) for the Torat Emet targum texts, Etheridge's targum translations, and the Metsudah Chumash English, via [Sefaria-Export-Archive](https://github.com/Sefaria/Sefaria-Export-Archive)
 - [ETCBC/dss](https://github.com/ETCBC/dss) and Martin G. Abegg Jr., James E. Bowley and Edward M. Cook for the Dead Sea Scrolls transcription, and [Hebrew Wikisource](https://he.wikisource.org/) for Pesher Habakkuk
+- [Open Greek and Latin / First1KGreek](https://github.com/OpenGreekAndLatin/First1KGreek) for the licensed Philo Greek and English editions
+- [Wikisource](https://en.wikisource.org/wiki/The_Book_of_Enoch_(Charles)) contributors for R. H. Charles's 1 Enoch and the [Latin Clementine Vulgate](https://la.wikisource.org/wiki/Vulgata_Clementina) 4 Esdras
+- [eBible.org](https://ebible.org/find/show.php?id=eng-kjv) for the public-domain KJV with Apocrypha
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition

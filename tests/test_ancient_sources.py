@@ -334,7 +334,7 @@ async def test_lookup_caps_passages_and_explains_failures(tmp_path, monkeypatch)
     unknown = await _call(db_path, monkeypatch, lookup, citation="Bava Batra 3b-4a")
     no_locator = await _call(db_path, monkeypatch, lookup, citation="Antiquities")
     whiston = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.5.2")
-    bad_corpus = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.116", corpus="philo")
+    bad_corpus = await _call(db_path, monkeypatch, lookup, citation="Ant. 18.116", corpus="nonesuch")
     missing = await _call(empty_path, monkeypatch, lookup, citation="Ant. 18.116")
 
     assert "Showing the first 1 of 2 overlapping passages" in capped
@@ -348,7 +348,7 @@ async def test_lookup_caps_passages_and_explains_failures(tmp_path, monkeypatch)
     assert no_locator.startswith("No locator in 'Antiquities'")
     assert "cited by book.section" in no_locator and "'Antiquities 18.116'" in no_locator
     assert whiston.startswith("Could not read the locator '18.5.2'")
-    assert bad_corpus.startswith("Unsupported ancient-source corpus 'philo'")
+    assert bad_corpus.startswith("Unsupported ancient-source corpus 'nonesuch'")
     assert "python scripts/upgrade_database.py" in missing
 
 

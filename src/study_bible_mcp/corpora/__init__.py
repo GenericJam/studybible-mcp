@@ -18,6 +18,8 @@ _CORPUS_MODULES = (
     "josephus",
     "targum",
     "qumran",
+    "philo",
+    "pseudepigrapha",
 )
 
 

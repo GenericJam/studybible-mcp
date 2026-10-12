@@ -2,6 +2,41 @@
 
 ---
 
+## Philo ancient source
+
+- Added the `philo` corpus: all 31 Greek treatises of Philo of Alexandria
+  (Cohn–Wendland) paired with C. D. Yonge's English, from First1KGreek pinned
+  to commit `03776b3` (CC BY-SA 4.0). Each of the 7,901 passages is one
+  Cohn–Wendland section with the English section of the same number; the 58
+  sections of *Spec.* 1–2 that Yonge lacks are Greek only.
+- Cited by SBL short title, Latin title, or English title: `Opif. 26`,
+  `Philo, Legat. 299`, `Leg. 1.31`, `Somn. 1.3`, `Mos. 1.65`, `Spec. 4.100`.
+- 25 curated links to the biblical verses the treatises quote and expound.
+- Greek search uses Greek script (`λόγος` or `λογος`); a transliteration such as
+  `logos` does not match.
+- Adds about 34 MB to the database.
+
+## Pseudepigrapha ancient source
+
+- Added the `pseudepigrapha` corpus with two non-canonical works, labelled as
+  attributed to Enoch and Ezra: 1 Enoch in R. H. Charles's English (public
+  domain, English Wikisource revisions pinned per chapter), one passage per
+  Charles verse including his sub-verses (1,072 passages); and 4 Ezra in the
+  KJV (public domain) with the Clementine Latin (Latin Wikisource, CC BY-SA
+  4.0), one passage per verse or per span where the two divide verses
+  differently (607 passages).
+- `4 Ezra`, `2 Esdras`, and `4 Esdras` citations resolve to the same passages:
+  4 Ezra 3–14 is 2 Esdras 3–14 with the same chapter numbers. KJV 7:36–70 is
+  cited as 4 Ezra 7:106–140 (the "missing fragment" 7:36–105 is absent from
+  both texts). 2 Esdras 1–2 and 15–16 are not included.
+- No Ge'ez text: none is available with a licence that can be stated per
+  passage at verse level.
+- 22 curated links, including the Animal Apocalypse (1 Enoch 89) with the
+  biblical narrative and the eagle vision (4 Ezra 11–12) with Daniel 7.
+- Adds about 2 MB to the database.
+
+---
+
 ## Qumran ancient source
 
 - Added the `qumran` corpus: 44 Hebrew manuscript columns, one passage per
