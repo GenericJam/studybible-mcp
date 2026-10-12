@@ -2,6 +2,19 @@
 
 ---
 
+## Josephus primary-source search
+
+- Added `search_ancient_sources` with full-text, corpus, biblical-reference,
+  editorial-period, and result-limit controls.
+- Added 2,304 sections across all four surviving Josephus works, pairing
+  Niese's Greek with Whiston's English.
+- Added checksum verification at a pinned Perseus commit and preserved
+  edition, translation, license, and source URL on each passage.
+- Kept editor notes out of primary-source text and labelled period/biblical
+  links as separate editorial metadata.
+
+---
+
 ## Brenton's English checked against Brenton's own Greek
 
 - Brenton's English translates his own 1844 Greek edition (chiefly Codex

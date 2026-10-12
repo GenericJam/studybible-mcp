@@ -1634,6 +1634,74 @@ class StudyBibleDB:
         return rows
 
 
+    async def search_ancient_sources(
+        self,
+        query: str,
+        corpus: str = "josephus",
+        biblical_reference: str | None = None,
+        period: str | None = None,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Full-text search licensed ancient sources with optional indexed filters."""
+        tokens = re.findall(r"\w+", query, re.UNICODE)
+        if not tokens:
+            return []
+        match_query = " AND ".join(f'"{token}"' for token in tokens)
+        where = ["ancient_source_passages_fts MATCH ?", "p.corpus = ?"]
+        params: list[Any] = [match_query, corpus]
+
+        if period:
+            where.append("(',' || p.period_tags || ',') LIKE ?")
+            params.append(f"%,{period},%")
+
+        if biblical_reference:
+            normalized = self._normalize_reference(biblical_reference)
+            match = re.match(r"^([^.]+)\.(\d+)\.(\d+)", normalized)
+            if not match:
+                return []
+            book, chapter, verse = match.groups()
+            where.append(
+                """EXISTS (
+                       SELECT 1 FROM ancient_source_biblical_links bl
+                       WHERE bl.passage_id = p.id
+                         AND bl.biblical_book = ?
+                         AND ? BETWEEN bl.sort_start AND bl.sort_end
+                   )"""
+            )
+            params.extend((book, int(chapter) * 1000 + int(verse)))
+
+        params.append(limit)
+        rows = await self._fetchall(
+            f"""SELECT p.*, bm25(ancient_source_passages_fts) AS rank
+                FROM ancient_source_passages_fts
+                JOIN ancient_source_passages p
+                  ON p.id = ancient_source_passages_fts.passage_id
+                WHERE {' AND '.join(where)}
+                ORDER BY rank, p.work_title, p.book_number, p.section_number
+                LIMIT ?""",
+            params,
+        )
+        if not rows:
+            return []
+
+        passage_ids = [row["id"] for row in rows]
+        placeholders = ",".join("?" for _ in passage_ids)
+        links = await self._fetchall(
+            f"""SELECT passage_id, biblical_book, sort_start, sort_end,
+                       relationship_note
+                FROM ancient_source_biblical_links
+                WHERE passage_id IN ({placeholders})
+                ORDER BY biblical_book, sort_start""",
+            passage_ids,
+        )
+        links_by_passage: dict[int, list[dict]] = {}
+        for link in links:
+            links_by_passage.setdefault(link["passage_id"], []).append(link)
+        for row in rows:
+            row["biblical_links"] = links_by_passage.get(row["id"], [])
+        return rows
+
+
     async def get_textual_variants(self, reference: str) -> list[dict]:
         """Get textual variants for a reference, with manuscript witnesses."""
         normalized = self._normalize_reference(reference)
@@ -2188,6 +2256,51 @@ def create_schema(conn: sqlite3.Connection):
             ON biblical_version_verses(canonical_book, canonical_chapter, canonical_verse);
         CREATE INDEX IF NOT EXISTS idx_bvv_edition
             ON biblical_version_verses(edition_book, edition_chapter, edition_verse);
+
+        -- Licensed ancient-source passages and full-text index.
+        CREATE TABLE IF NOT EXISTS ancient_source_passages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            corpus TEXT NOT NULL,
+            author TEXT NOT NULL,
+            work_key TEXT NOT NULL,
+            work_title TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            book_number INTEGER NOT NULL,
+            section_number TEXT NOT NULL,
+            text TEXT NOT NULL,
+            original_text TEXT,
+            period_tags TEXT NOT NULL,
+            edition TEXT NOT NULL,
+            translation TEXT,
+            license TEXT NOT NULL,
+            source_url TEXT NOT NULL,
+            UNIQUE(corpus, work_key, reference)
+        );
+        CREATE INDEX IF NOT EXISTS idx_asp_corpus_period
+            ON ancient_source_passages(corpus, period_tags);
+        CREATE INDEX IF NOT EXISTS idx_asp_reference
+            ON ancient_source_passages(corpus, work_key, book_number, section_number);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS ancient_source_passages_fts USING fts5(
+            passage_id UNINDEXED,
+            work_title,
+            reference,
+            text,
+            original_text,
+            tokenize = 'unicode61 remove_diacritics 2'
+        );
+
+        CREATE TABLE IF NOT EXISTS ancient_source_biblical_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            passage_id INTEGER NOT NULL REFERENCES ancient_source_passages(id),
+            biblical_book TEXT NOT NULL,
+            sort_start INTEGER NOT NULL,
+            sort_end INTEGER NOT NULL,
+            relationship_note TEXT NOT NULL,
+            UNIQUE(passage_id, biblical_book, sort_start, sort_end)
+        );
+        CREATE INDEX IF NOT EXISTS idx_asbl_biblical
+            ON ancient_source_biblical_links(biblical_book, sort_start, sort_end);
 
         -- Textual variants (MT vs DSS/LXX/SP)
         CREATE TABLE IF NOT EXISTS textual_variants (

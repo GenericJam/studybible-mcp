@@ -201,6 +201,58 @@ omitted independently.""",
         },
     ),
     Tool(
+        name="search_ancient_sources",
+        annotations=ToolAnnotations(
+            title="Search Ancient Sources",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+        ),
+        description="""Search licensed primary-source corpora for Second Temple and
+early Roman Jewish history. The initial corpus is all four surviving works of
+Flavius Josephus in Whiston's English translation paired with Niese's Greek.
+
+Results are source passages, not modern historical judgments. Every result
+identifies the author, work, conventional reference, editorial period tags,
+edition, translation, license, and source URL. `biblical_reference` uses a
+small explicit editorial link set and is never inferred from keyword overlap.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Words that must occur in the source passage (e.g. 'John Baptist' or 'Herod temple')",
+                },
+                "corpus": {
+                    "type": "string",
+                    "enum": ["josephus"],
+                    "default": "josephus",
+                    "description": "Licensed corpus to search. Default: josephus",
+                },
+                "biblical_reference": {
+                    "type": "string",
+                    "description": "Optional verse used to filter explicit editorial passage links",
+                },
+                "period": {
+                    "type": "string",
+                    "enum": [
+                        "biblical", "persian", "second_temple", "hellenistic",
+                        "hasmonean", "herodian", "roman", "first_jewish_revolt",
+                    ],
+                    "description": "Optional editorial period tag",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "default": 5,
+                    "description": "Maximum passages. Default: 5",
+                },
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
         name="search_lexicon",
         annotations=ToolAnnotations(title="Search Lexicon", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
         description="""Search the Greek and Hebrew lexicons by English word, transliteration, or concept.
@@ -1258,6 +1310,62 @@ def format_biblical_version_comparison(
                     lines.append(f"- **{surface}**{f' ({details})' if details else ''}{gloss}")
                 lines.append("")
 
+    return "\n".join(lines).rstrip()
+
+
+def _format_ancient_biblical_link(link: dict) -> str:
+    start_chapter, start_verse = divmod(link["sort_start"], 1000)
+    end_chapter, end_verse = divmod(link["sort_end"], 1000)
+    start = f"{link['biblical_book']} {start_chapter}:{start_verse}"
+    end = (
+        f"{end_verse}"
+        if start_chapter == end_chapter
+        else f"{end_chapter}:{end_verse}"
+    )
+    reference = start if link["sort_start"] == link["sort_end"] else f"{start}–{end}"
+    return f"{reference} — {link['relationship_note']}"
+
+
+def format_ancient_source_results(
+    query: str,
+    rows: list[dict],
+    corpus: str,
+    biblical_reference: str | None = None,
+    period: str | None = None,
+) -> str:
+    """Format primary-source results with provenance and editorial labels."""
+    filters = [f"corpus={corpus}"]
+    if biblical_reference:
+        filters.append(f"biblical_reference={biblical_reference}")
+    if period:
+        filters.append(f"period={period}")
+    lines = [
+        f"## Ancient Source Search: {query}",
+        "",
+        f"*Filters: {', '.join(filters)}*",
+        "",
+    ]
+    for row in rows:
+        lines.append(f"### {row['author']}, {row['reference']}")
+        lines.append(f"- **Work:** {row['work_title']}")
+        lines.append(f"- **Editorial period tags:** {row['period_tags']}")
+        lines.append(f"- **Greek edition:** {row['edition']}")
+        lines.append(f"- **English translation:** {row['translation']}")
+        lines.append(f"- **License:** {row['license']}")
+        lines.append(f"- **Source:** {row['source_url']}")
+        lines.append("")
+        lines.append(_truncate(row["text"], 2500, "\n\n*[Passage excerpt truncated]*"))
+        if row.get("original_text"):
+            lines.extend([
+                "",
+                "**Greek text excerpt:**",
+                _truncate(row["original_text"], 800, "\n\n*[Greek excerpt truncated]*"),
+            ])
+        if row.get("biblical_links"):
+            lines.extend(["", "**Editorial biblical links:**"])
+            for link in row["biblical_links"]:
+                lines.append(f"- {_format_ancient_biblical_link(link)}")
+        lines.extend(["", "---", ""])
     return "\n".join(lines).rstrip()
 
 

@@ -172,6 +172,12 @@ flowchart TD
     ContextDeepen -->|Dictionary background| BibleDict
     ContextDeepen -->|Sufficient| Respond
 
+    Classify -->|"Second Temple or Roman Jewish history"| AncientSources
+    AncientSources["`**search_ancient_sources**
+    Returns: Josephus source passages,
+    Greek/English text, and provenance`"]
+    AncientSources --> Respond
+
     %% === THEOLOGY PATH ===
     Classify -->|"Attributed scholarship"| TheologyContext
     TheologyContext["`**get_theology_context**
@@ -246,6 +252,7 @@ flowchart TD
     style TorahWeave fill:#7ed321,stroke:#5a9e18,color:#fff
     style TextualVariant fill:#7ed321,stroke:#5a9e18,color:#fff
     style VersionComparison fill:#7ed321,stroke:#5a9e18,color:#fff
+    style AncientSources fill:#e67e22,stroke:#cf6d17,color:#fff
 ```
 
 ## Tool Colour Key
@@ -256,7 +263,7 @@ flowchart TD
 | Purple | Hybrid search | find_similar_passages, graph_enriched_search |
 | Red | Graph knowledge | explore_genealogy, explore_person_events, explore_place, find_connection, people_in_passage |
 | Light blue | Scholarly commentary | get_study_notes, get_bible_dictionary, get_key_terms, get_theology_context |
-| Dark orange | Cultural context | get_ane_context |
+| Dark orange | Cultural and historical context | get_ane_context, search_ancient_sources |
 | Orange | Agent decisions | Classification and enrichment decision points |
 | Blue | User interaction | Question input and final response |
 
@@ -304,6 +311,9 @@ User question → `get_ane_context` → `lookup_verse`
 **Deep passage study with ANE background:**
 User question → `lookup_verse` → `get_study_notes` →
 `get_ane_context` (for cultural illumination) → `word_study` → response
+
+**Primary-source history:**
+User question → `search_ancient_sources` → `lookup_verse` (for an explicitly linked biblical passage) → response
 
 **Edition comparison:**
 User question → `compare_biblical_versions` → `word_study` (when morphology needs explanation) → response

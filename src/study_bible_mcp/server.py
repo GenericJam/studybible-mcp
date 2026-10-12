@@ -37,6 +37,7 @@ from .tools import (
     format_genealogy, format_person_events, format_place_history,
     format_passage_entities, format_connection_path,
     format_enriched_verse, format_biblical_version_comparison,
+    format_ancient_source_results,
     mermaid_genealogy, mermaid_connection_path, mermaid_person_timeline,
     mermaid_place_network,
     format_study_notes, format_dictionary_article, format_key_terms,
@@ -316,6 +317,54 @@ async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextCon
             include_morphology=args.get("include_morphology", False),
             numbering=result["numbering"],
             note=lxx_only_note,
+        )
+    )
+
+
+async def handle_search_ancient_sources(args: dict[str, Any]) -> list[TextContent]:
+    """Search Josephus with explicit corpus, period, and biblical-link filters."""
+    query = args.get("query", "").strip()
+    if not query:
+        return text("Please provide words to search in the ancient source text.")
+
+    corpus = str(args.get("corpus", "josephus")).lower()
+    if corpus != "josephus":
+        return text("Unsupported ancient-source corpus. Available corpus: josephus.")
+    period = args.get("period")
+    periods = {
+        "biblical", "persian", "second_temple", "hellenistic",
+        "hasmonean", "herodian", "roman", "first_jewish_revolt",
+    }
+    if period and period not in periods:
+        return text(f"Unsupported period: {period}.")
+    try:
+        limit = int(args.get("limit", 5))
+    except (TypeError, ValueError):
+        return text("'limit' must be an integer from 1 to 20.")
+    if not 1 <= limit <= 20:
+        return text("'limit' must be an integer from 1 to 20.")
+
+    biblical_reference = args.get("biblical_reference")
+    rows = await db.search_ancient_sources(
+        query,
+        corpus=corpus,
+        biblical_reference=biblical_reference,
+        period=period,
+        limit=limit,
+    )
+    if not rows:
+        return text(
+            "No ancient-source passages matched the query and filters. "
+            "Run scripts/download_ancient_sources.py and rebuild the database "
+            "if the Josephus corpus has not been imported."
+        )
+    return text(
+        format_ancient_source_results(
+            query,
+            rows,
+            corpus,
+            biblical_reference=biblical_reference,
+            period=period,
         )
     )
 
@@ -1196,6 +1245,7 @@ _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
     "compare_biblical_versions": handle_compare_biblical_versions,
+    "search_ancient_sources": handle_search_ancient_sources,
     "search_lexicon": handle_search_lexicon,
     "get_cross_references": handle_get_cross_references,
     "lookup_name": handle_lookup_name,

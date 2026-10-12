@@ -220,6 +220,26 @@ New Testament references, unparseable references, and references with no
 matching verses each return a specific message. A database without the
 Septuagint table tells you to run `python scripts/upgrade_database.py`.
 
+#### `search_ancient_sources`
+
+Search licensed primary-source corpora for Jewish history. The initial
+`josephus` corpus contains 2,304 sections from *Jewish Antiquities*, *The
+Jewish War*, *Life*, and *Against Apion*. Results pair the Niese Greek edition
+with Whiston's English translation and identify the license and pinned source.
+
+```text
+search_ancient_sources(
+  query="John Baptist",
+  corpus="josephus",
+  biblical_reference="Mark 6:20",
+  period="second_temple",
+  limit=5
+)
+```
+
+Period tags and biblical links are explicitly labelled editorial metadata;
+they are not presented as claims made by Josephus.
+
 #### 2. `word_study`
 
 Deep dive into a Greek or Hebrew word's meaning, usage, and etymology. Greek entries include both the full Liddell-Scott-Jones (LSJ) definition for classical breadth and the Abbott-Smith definition for NT-specific insight (with LXX/Hebrew equivalents, synonym discussions, and NT occurrence counts). Hebrew entries include the full Brown-Driver-Briggs (BDB) definition.
@@ -840,11 +860,13 @@ studybible-mcp/
 │       ├── acai.py            # ACAI entity annotation parser
 │       ├── ane_context.py     # ANE cultural context parser
 │       ├── biblical_versions.py # MT/LXX text, morphology, and versification
+│       ├── ancient_sources.py # Josephus TEI parser and corpus metadata
 │       ├── tagged_text.py     # TAGNT/TAHOT morphology parsers
 │       └── proper_names.py    # TIPNR name parser
 ├── scripts/
 │   ├── download_stepbible.py  # Download base source data (--aquifer flag)
 │   ├── download_biblical_versions.py # Download pinned LXX/Brenton sources
+│   ├── download_ancient_sources.py # Download pinned Josephus sources
 │   ├── build_database.py      # Build SQLite database
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
@@ -904,6 +926,19 @@ Brenton's Greek is stored only for the verses where it differs from Rahlfs
 (about 5 MB). `build_database.py` stops with an error if `data/lxx` is present
 but incomplete (any of the 59 morphology books, the mapping, a required Brenton
 English or Greek book, or a manifest-listed file is missing or truncated).
+
+### Josephus
+
+`search_ancient_sources` uses all four Josephus works from
+[PerseusDL canonical-greekLit](https://github.com/PerseusDL/canonical-greekLit),
+pinned to commit `01b725d835e6e733062ffd79e0efdbae1ba06e5c`. The importer pairs
+Benedikt Niese's Greek edition with William Whiston's English translation at
+section level, excludes editor notes from primary-source text, and builds an
+FTS5 index. Each TEI file declares CC BY-SA 4.0; downloads are checked against
+their pinned Git blob hashes.
+
+Biblical links are a small, separate editorial index of direct narrative
+overlap. They do not assert literary dependence or historical agreement.
 
 ### BDB Hebrew Lexicon
 
@@ -1018,6 +1053,7 @@ MIT License. See [LICENSE](LICENSE).
 
 Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 OpenScriptorium LXX morphology and MT/LXX verse mappings are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
+The Perseus Josephus Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -1030,6 +1066,7 @@ The theology and ANE entries are original summary prose written for this project
 - [STEPBible](https://www.stepbible.org/) for the freely available biblical data
 - [OpenScriptorium](https://github.com/OpenScriptorium/lxx-morph) for Rahlfs LXX morphology and explicit MT/LXX verse mappings
 - [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
+- [Perseus Digital Library](https://github.com/PerseusDL/canonical-greekLit) for the licensed Josephus Greek and English editions
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition
