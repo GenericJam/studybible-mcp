@@ -16,6 +16,7 @@ from .citations import CitationMatch, Resolution, resolve_citation
 # One module name per corpus, in display order.
 _CORPUS_MODULES = (
     "josephus",
+    "targum",
 )
 
 

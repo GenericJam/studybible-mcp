@@ -36,7 +36,8 @@ This guide covers running your own instance of the Study Bible MCP server.
    The additional commands download the pinned 59-book Rahlfs morphology
    corpus, explicit MT/LXX versification mappings, public-domain Brenton English
    and Greek USFM, and every registered ancient-source corpus (currently the
-   licensed Josephus Greek/English corpus) into `data/ancient_sources/<corpus>/`.
+   licensed Josephus Greek/English corpus and the Onkelos/Pseudo-Jonathan
+   Aramaic/English targums) into `data/ancient_sources/<corpus>/`.
    They validate source checksums before import; the build imports each
    downloaded corpus and fails on an incomplete one.
 5. **Build the database**
@@ -47,7 +48,8 @@ This guide covers running your own instance of the Study Bible MCP server.
    This creates the base `db/study_bible.db` and imports the bundled attributed
    theology and manuscript-variant records. Its final size depends on the
    optional graph, commentary, and embedding datasets; the deployed database is
-   about 750MB once the MT/LXX and Josephus corpora are imported.
+   about 750MB once the MT/LXX and Josephus corpora are imported; the targums
+   add about 24 MiB.
 
    To bring an existing database (for example one downloaded from a deployment)
    up to the current schema and sources, upgrade it in place instead of

@@ -232,13 +232,17 @@ registered corpus key or `all`; the registry (`src/study_bible_mcp/corpora/`)
 currently holds `josephus`: 2,304 Whiston sections from *Jewish Antiquities*,
 *The Jewish War*, *Life*, and *Against Apion*. Each section is paired with
 every Niese Greek section it spans and referenced as a Niese span plus
-Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Each
-result names its corpus, work, and citation, and shows up to 1,500 characters
-of English around the first match and a shorter original-language excerpt
-(match-centred when the query is in the original's script; a passage without
-openly licensed English shows its original instead); the edition, translation,
-license, and pinned source are listed once at the end. Up to 4 passages are
-returned by default.
+Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. `targum`
+holds Targum Onkelos and Targum Pseudo-Jonathan on the five books of the Torah:
+11,684 Aramaic verse passages, with Etheridge's public-domain English for
+Pseudo-Jonathan and the CC BY-NC Metsudah English for most of Onkelos (see
+[Targums](#targums)), each linked to the verse it translates. Each result names
+its corpus, work, and citation, and shows up to 1,500 characters of English
+around the first match and a shorter original-language excerpt (match-centred
+when the query is in the original's script; a passage without openly licensed
+English shows its original instead); the edition, translation, license, and
+pinned source are listed once at the end. Up to 4 passages are returned by
+default.
 
 ```text
 search_ancient_sources(
@@ -261,8 +265,11 @@ Because a root letter can look like a prefix, a search can also find a
 different word (`קדש` finds `מקדש`). Passages containing every query word come
 first; when none do, passages matching any word are returned with an explicit
 note. `biblical_reference` accepts a chapter, verse, or verse range (`Luke 21`,
-`Luke 21:5`, `Luke 21:5-6`) and filters to curated narrative-overlap links (33
-for Josephus), each checked against the linked passage text. Period tags,
+`Luke 21:5`, `Luke 21:5-6`) and filters to editorial links: curated
+narrative-overlap links (33 for Josephus), each checked against the linked
+passage text, and one "Translation of" link per targum verse, derived from its
+verse key (`biblical_reference="Deuteronomy 32:8"` with `corpus="targum"` finds
+both targums of that verse). Period tags,
 biblical links, and editorial chapter headings (Whiston's, for Josephus) are
 labelled editorial metadata; they are not presented as claims made by the
 ancient author. Empty results say whether the corpus is missing, the reference
@@ -275,11 +282,18 @@ abbreviation plus a locator in that work's numbering; an author prefix is
 optional. For Josephus: `Antiquities`/`Ant.`/`A.J.`, `War`/`B.J.`/`J.W.`, and
 `Against Apion`/`C. Ap.` take Niese `book.section`; `Life`/`Vita` takes a
 section.
+For the targums, `Targum Onkelos`/`Onkelos`/`Tg. Onq.` or `Targum
+Pseudo-Jonathan`/`Pseudo-Jonathan`/`Tg. Ps.-J.` precedes a Torah book
+(`Genesis`/`Gen`, `Exodus`/`Exod`, `Leviticus`/`Lev`, `Numbers`/`Num`,
+`Deuteronomy`/`Deut`) and `chapter:verse`; a bare `Genesis 1:1` is ambiguous
+between the two targums.
 
 ```text
 lookup_ancient_source(citation="Ant. 15.320")            # inside Antiquities 15.317–322
 lookup_ancient_source(citation="Josephus, War 6.316")
 lookup_ancient_source(citation="Antiquities 18.116-121", include_original=False)
+lookup_ancient_source(citation="Tg. Ps.-J. Deut 32:8")
+lookup_ancient_source(citation="Onkelos Genesis 1:1-3")
 ```
 
 A locator inside a longer passage returns the passage containing it; a range
@@ -933,7 +947,8 @@ studybible-mcp/
 │   │   ├── locators.py        # Citation locator grammars and sort keys
 │   │   ├── citations.py       # Citation-to-work resolution
 │   │   ├── download.py        # Checksum-verified download helpers
-│   │   └── josephus.py        # Josephus TEI parser, works, and links
+│   │   ├── josephus.py        # Josephus TEI parser, works, and links
+│   │   └── targum.py          # Onkelos and Pseudo-Jonathan Sefaria files, verse keys
 │   └── parsers/
 │       ├── lexicon.py         # TFLSJ, BDB, Abbott-Smith, TBESG, TBESH parsers
 │       ├── aquifer.py         # BibleAquifer JSON parser
@@ -1058,6 +1073,51 @@ link does not resolve. They do not assert literary dependence or historical
 agreement, and the Testimonium Flavianum link is marked as of disputed
 authenticity.
 
+### Targums
+
+The `targum` corpus holds Targum Onkelos and Targum Pseudo-Jonathan on all five
+books of the Torah, one work per targum and book (`onkelos_genesis` …
+`pseudo_jonathan_deuteronomy`, cited as `Onkelos Genesis 1:1` or `Tg. Ps.-J.
+Deut 32:8`). The 21 version files come from Sefaria's archived export,
+[Sefaria/Sefaria-Export-Archive](https://github.com/Sefaria/Sefaria-Export-Archive)
+at commit `3f1013631fdfe452e953a93a2c5f921319e394ed` (the last commit holding
+the JSON texts), each checked against its pinned Git blob hash and against the
+`license` and `versionTitle` it declares; `merged.json` files are never used.
+
+- **Aramaic:** the Torat Emet text of each targum (Sefaria versions `Onkelos
+  {Book}` and `Targum Jonathan on {Book}`), declared Public Domain by Sefaria.
+  One passage per Masoretic verse: 5,846 for Onkelos and 5,838 for
+  Pseudo-Jonathan, which lacks Gen 5:5–7, 6:15, 10:23, 21:34 and 41:49. Sefaria
+  numbers Pseudo-Jonathan Genesis 20 by position, so its 20:15 and 20:16 are
+  swapped relative to the Masoretic text and its 20:17 runs through 20:18; the
+  parser keys them as 20:16, 20:15 and `Genesis 20:17–18` (checked against
+  Onkelos and the Etheridge English). A `???` digitization mark before Onkelos
+  Genesis 49:12 is removed.
+- **Pseudo-Jonathan English:** J. W. Etheridge, *The Targums of Onkelos and
+  Jonathan ben Uzziel on the Pentateuch* (London, 1862–65), public domain, keyed
+  to Masoretic verses by Sefaria. Braced text in that file is not Etheridge's:
+  clauses the digitizer supplied (e.g. Deut 9:12 `{Onq., Nf. MT; …}`, or Gen
+  18:4, 19:13 and 20:15, absent from Etheridge's text at targum.info) are shown
+  as `…`, and glosses of Aramaic terms (`{Dibbera}`), transliterations
+  (`<mymr'>`) and footnotes are dropped. The 79 verses Etheridge omits,
+  abbreviates (the repeated offerings of Num 7) or groups into a neighbour are
+  Aramaic-only passages.
+- **Onkelos English:** Etheridge's Onkelos is on Sefaria only for Genesis
+  6:1–14:24 (223 verses, public domain), and his full Onkelos at targum.info has
+  no verse numbers, so it is not aligned by hand. Every other Onkelos verse
+  carries the Metsudah Chumash (Metsudah Publications, 2009, Sefaria version
+  `Metsudah Chumash, Metsudah Publications, 2009 [with Onkelos translation]`,
+  CC BY-NC 4.0). It translates the Hebrew text and gives Onkelos's renderings in
+  brackets, so it is **not a direct translation of the Aramaic** beside it;
+  each passage's translation field says so, and its licence line reads
+  `Aramaic text: Public domain; English translation: CC BY-NC 4.0`.
+
+Each passage has one editorial "Translation of" link to the verse or verses
+its sort key covers, so `biblical_reference` finds the targums of a verse.
+Period tags give the redaction era (editorial): `amoraic` for Onkelos,
+`amoraic,early_islamic` for Pseudo-Jonathan. The corpus adds about 24 MiB to a
+vacuumed database.
+
 ### BDB Hebrew Lexicon
 
 The full unabridged Brown-Driver-Briggs Hebrew lexicon (8,090 entries) comes from [eliranwong/unabridged-BDB-Hebrew-lexicon](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon). The BDB is the standard scholarly Hebrew-English lexicon, originally published in 1906 and still widely used in academic study. Public domain text.
@@ -1172,6 +1232,7 @@ MIT License. See [LICENSE](LICENSE).
 Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 OpenScriptorium LXX morphology and MT/LXX verse mappings (derived in part from STEPBible's TVTMS) are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
 The Perseus Josephus Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+The targum Aramaic (Torat Emet) and Etheridge's English are public domain as declared by [Sefaria](https://www.sefaria.org/); the Metsudah Chumash English of Onkelos is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (non-commercial use only), and its licence is shown on every passage.
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -1186,6 +1247,7 @@ The theology and ANE entries are original summary prose written for this project
 - [STEPBible.org / Tyndale House Cambridge](https://github.com/STEPBible/STEPBible-Data) for TVTMS, the versification data behind those mappings
 - [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
 - [Perseus Digital Library](https://github.com/PerseusDL/canonical-greekLit) for the licensed Josephus Greek and English editions
+- [Sefaria](https://www.sefaria.org/) for the Torat Emet targum texts, Etheridge's targum translations, and the Metsudah Chumash English, via [Sefaria-Export-Archive](https://github.com/Sefaria/Sefaria-Export-Archive)
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition

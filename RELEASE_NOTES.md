@@ -2,6 +2,32 @@
 
 ---
 
+## Targum ancient source
+
+- Added the `targum` corpus: Targum Onkelos and Targum Pseudo-Jonathan on all
+  five books of the Torah, 11,684 Aramaic verse passages (Torat Emet text via
+  Sefaria) pinned to `Sefaria/Sefaria-Export-Archive` commit `3f1013631fde` and
+  verified by Git blob hash and declared licence. Cite them as `Onkelos Genesis
+  1:1`, `Targum Onkelos Gen 1:1`, `Pseudo-Jonathan Exodus 12:40` or `Tg. Ps.-J.
+  Deut 32:8`; a bare `Genesis 1:1` is ambiguous between the targums.
+- English: Etheridge (1862–65, public domain) for Pseudo-Jonathan and for
+  Onkelos Genesis 6:1–14:24. Other Onkelos verses carry the Metsudah Chumash
+  (2009, CC BY-NC 4.0), labelled on every passage as "English of the Hebrew text
+  with Onkelos's renderings in [brackets]; not a direct translation of the
+  Aramaic", with the licence line `Aramaic text: Public domain; English
+  translation: CC BY-NC 4.0`. The 79 Pseudo-Jonathan verses Etheridge omits or
+  groups elsewhere are Aramaic-only; braced text the digitizer supplied becomes
+  `…`.
+- Each targum verse has one "Translation of" biblical link, so
+  `search_ancient_sources(query=..., corpus="targum", biblical_reference="Deuteronomy 32:8")`
+  finds the targums of that verse. Pseudo-Jonathan Genesis 20:15–18 is re-keyed
+  to Masoretic verses (Sefaria numbers it by position).
+- Citation names now treat hyphens and dashes between name tokens like spaces,
+  so `Pseudo-Jonathan` and `Tg. Ps.-J.` resolve; locator ranges are unchanged.
+- The corpus adds about 24 MiB to a vacuumed database.
+
+---
+
 ## Ancient-source corpus framework and citation lookup
 
 - Added `lookup_ancient_source(citation, corpus, include_original)`, which

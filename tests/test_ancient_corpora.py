@@ -240,6 +240,21 @@ def test_shared_title_without_collection_is_ambiguous_until_prefixed():
     assert _resolved("Tosefta Bava Batra 1:1")[1] == "tosefta_bava_batra"
 
 
+def test_hyphens_and_dashes_separate_name_tokens_but_not_locators():
+    targums = _corpus("targums", (
+        Work("psj_exodus", "Exodus", "Exodus", CHAPTER_VERSE, ("Exod.",),
+             Collection("Targum Pseudo-Jonathan", ("Pseudo-Jonathan", "Tg. Ps.-J."))),
+    ))
+    corpora = (CORPORA["josephus"], targums)
+
+    for citation in ("Pseudo-Jonathan Exodus 12:40", "Pseudo Jonathan Exodus 12:40",
+                     "Pseudo–Jonathan Exod. 12:40", "Tg. Ps.-J. Exod 12:40", "Tg Ps J Exodus 12:40"):
+        assert _resolved(citation, corpora) == ("targums", "psj_exodus", (12040, 12040)), citation
+    assert _resolved("Tg. Ps.-J. Exodus 12:40-13:2", corpora)[2] == (12040, 13002)
+    assert _resolved("Ant. 18.116-119", corpora) == ("josephus", "antiquities", (18116, 18119))
+    assert _resolved("Ant. 18.116–119", corpora) == ("josephus", "antiquities", (18116, 18119))
+
+
 def test_unknown_work_and_unreadable_locator():
     assert resolve_citation("Bava Batra 3b", list(CORPORA.values())).status == "unknown_work"
     assert resolve_citation("Lifeboat 1", TEST_CORPORA).status == "unknown_work"

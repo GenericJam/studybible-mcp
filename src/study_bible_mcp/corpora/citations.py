@@ -44,11 +44,11 @@ class Resolution:
 
 @lru_cache(maxsize=None)
 def _name_regex(name: str) -> re.Pattern[str]:
-    """Match a name ignoring case, punctuation and spacing ('A.J.' ~ 'AJ', 'A. J.')."""
+    """Match a name ignoring case, punctuation, dashes and spacing ('A.J.' ~ 'AJ', 'Ps.-J.' ~ 'Ps. J.')."""
     tokens = re.findall(r"[^\W_]+", name.lower())
     if not tokens:
         raise ValueError(f"Citation name {name!r} has no letters or digits")
-    return re.compile(r"[\s.,]*".join(map(re.escape, tokens)) + r"(?![^\W_])", re.IGNORECASE)
+    return re.compile(r"[\s.,\-‐‑‒–—]*".join(map(re.escape, tokens)) + r"(?![^\W_])", re.IGNORECASE)
 
 
 def _after(name: str, text: str, position: int) -> int | None:
