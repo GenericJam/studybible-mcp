@@ -7,7 +7,7 @@ Study Bible
 Greek/Hebrew lexicons & scholarly tools for Bible study
 
 ## Description (50-100 words)
-Study Bible gives Claude access to 18 scholarly Bible study tools: full Greek (LSJ, Abbott-Smith) and Hebrew (BDB) lexicons, morphologically-tagged biblical texts, cross-references, Theographic genealogy graphs, Aquifer study notes, a Tyndale Bible Dictionary, key theological terms, Ancient Near East cultural context, and vector-based passage similarity search. All tools are read-only queries against a pre-built SQLite database. No API keys, no signup, no data collection. Grounded in Fee & Stuart's hermeneutical methodology.
+Study Bible gives Claude access to read-only scholarly Bible study tools: full Greek (LSJ, Abbott-Smith) and Hebrew (BDB) lexicons, morphologically-tagged biblical texts, cross-references, Theographic genealogy graphs, Aquifer study notes, a Tyndale Bible Dictionary, key theological terms, Ancient Near East cultural context, theological scholarship, Torah structural analysis, textual variants, and vector-based passage similarity search. Queries run against a pre-built SQLite database. No API keys, signup, or data collection.
 
 ## Categories
 - Education
@@ -40,7 +40,7 @@ Study Bible gives Claude access to 18 scholarly Bible study tools: full Greek (L
 - **Transport**: Streamable HTTP (`/mcp`) + SSE (`/sse`) + stdio
 - **Authentication**: None required (public, read-only)
 - **Rate limiting**: 100 requests/minute per IP
-- **Tools**: 18 (all annotated with `readOnlyHint: true`)
+- **Tools**: All tools are annotated with `readOnlyHint: true`
 - **Sponsored content**: None
 - **Data collection**: None — see [Privacy Policy](https://studybible-mcp.fly.dev/privacy)
 

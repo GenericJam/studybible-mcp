@@ -172,6 +172,27 @@ flowchart TD
     ContextDeepen -->|Dictionary background| BibleDict
     ContextDeepen -->|Sufficient| Respond
 
+    %% === THEOLOGY PATH ===
+    Classify -->|"Attributed scholarship"| TheologyContext
+    TheologyContext["`**get_theology_context**
+    Returns: attributed scholarship
+    by reference, theme, or author`"]
+    TheologyContext --> Respond
+
+    %% === TORAH STRUCTURE PATH ===
+    Classify -->|"Torah structural parallels"| TorahWeave
+    TorahWeave["`**get_torah_weave**
+    Returns: woven Torah unit,
+    cell, and paired passages`"]
+    TorahWeave --> LookupVerse
+
+    %% === TEXTUAL CRITICISM PATH ===
+    Classify -->|"MT/LXX/DSS divergence"| TextualVariant
+    TextualVariant["`**get_textual_variant**
+    Returns: variant readings,
+    witnesses, and NT quotation links`"]
+    TextualVariant --> Respond
+
     %% === GRAMMAR PATH ===
     Classify -->|"Grammar question\n(e.g. 'What does V-AAI-3S mean?')"| GrammarPath
     GrammarPath --> ParseMorph
@@ -215,16 +236,19 @@ flowchart TD
     style BibleDict fill:#3498db,stroke:#2178b5,color:#fff
     style KeyTerms fill:#3498db,stroke:#2178b5,color:#fff
     style ANEContext fill:#e67e22,stroke:#cf6d17,color:#fff
+    style TheologyContext fill:#3498db,stroke:#2178b5,color:#fff
+    style TorahWeave fill:#7ed321,stroke:#5a9e18,color:#fff
+    style TextualVariant fill:#7ed321,stroke:#5a9e18,color:#fff
 ```
 
 ## Tool Colour Key
 
 | Colour | Category | Tools |
 |--------|----------|-------|
-| Green | Core text & language | lookup_verse, word_study, search_lexicon, search_by_strongs, get_cross_references, parse_morphology, lookup_name |
+| Green | Core text & language | lookup_verse, word_study, search_lexicon, search_by_strongs, get_cross_references, parse_morphology, lookup_name, get_torah_weave, get_textual_variant |
 | Purple | Hybrid search | find_similar_passages, graph_enriched_search |
 | Red | Graph knowledge | explore_genealogy, explore_person_events, explore_place, find_connection, people_in_passage |
-| Light blue | Scholarly commentary | get_study_notes, get_bible_dictionary, get_key_terms |
+| Light blue | Scholarly commentary | get_study_notes, get_bible_dictionary, get_key_terms, get_theology_context |
 | Dark orange | Cultural context | get_ane_context |
 | Orange | Agent decisions | Classification and enrichment decision points |
 | Blue | User interaction | Question input and final response |
@@ -273,3 +297,12 @@ User question → `get_ane_context` → `lookup_verse`
 **Deep passage study with ANE background:**
 User question → `lookup_verse` → `get_study_notes` →
 `get_ane_context` (for cultural illumination) → `word_study` → response
+
+**Textual comparison:**
+User question → `get_textual_variant` → `lookup_verse` → response
+
+**Torah structural study:**
+User question → `get_torah_weave` → `lookup_verse` → response
+
+**Attributed theological study:**
+User question → `get_theology_context` → `lookup_verse` → response

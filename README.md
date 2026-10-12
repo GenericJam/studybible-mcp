@@ -85,14 +85,14 @@ Config file locations:
 │   or Claude Code    │     │   (Fly.io)                               │
 │                     │     │                                          │
 │  ┌───────────────┐  │ MCP │  ┌─────────────┐  ┌───────────────────┐  │
-│  │ User asks a   │──┼─────┼─▶│ MCP Server  │─▶│ SQLite DB (359MB) │  │
+│  │ User asks a   │──┼─────┼─▶│ MCP Server  │─▶│ SQLite DB (600+MB)│  │
 │  │ Bible question│  │     │  │ (Python)    │  │                   │  │
 │  └───────────────┘  │     │  └─────────────┘  │ • Lexicons (LSJ,  │  │
 │                     │     │        │          │   BDB, Abbott-     │  │
 │  ┌───────────────┐  │     │        ▼          │   Smith, Strong's) │  │
 │  │ Claude uses   │◀─┼─────┼── Tool Results    │ • Tagged NT + OT  │  │
-│  │ 18 tools to   │  │     │                   │ • Names + ACAI    │  │
-│  │ look up data  │  │     │                   │ • Morphology      │  │
+│  │ study tools to│  │     │                   │ • Names + ACAI    │  │
+│  │ answer        │  │     │                   │ • Morphology      │  │
 │  └───────────────┘  │     │                   │ • Study Notes     │  │
 │                     │     │                   │ • Bible Dictionary │  │
 │                     │     │                   │ • Key Terms        │  │
@@ -109,7 +109,7 @@ When you ask Claude a Bible question:
 4. Results are returned to Claude
 5. Claude synthesises the data into a helpful response
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a full Mermaid flowchart of all 18 tools and how the agent chains them together.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a full Mermaid flowchart of the available tools and how the agent chains them together.
 
 ### The Database
 
@@ -136,7 +136,7 @@ You can download the pre-built database directly: **[study_bible.db](https://stu
 
 ---
 
-## Available Tools (18)
+## Available Tools
 
 ### Core Text & Language
 
@@ -450,6 +450,20 @@ Returns:
 - Daniel 2:29-45 (60.8% similar) - Nebuchadnezzar's statue
 ```
 
+### Theological Scholarship & Structure
+
+#### `get_theology_context`
+
+Retrieve attributed theological scholarship by biblical reference, theme, or author.
+
+#### `get_torah_weave`
+
+Find structurally paired Torah passages under Moshe Kline's Woven Torah hypothesis.
+
+#### `get_textual_variant`
+
+Inspect catalogued MT/LXX/DSS readings, manuscript witnesses, and NT quotations of LXX forms.
+
 ---
 
 ## How Users Interact
@@ -757,9 +771,9 @@ Options:
 ```
 studybible-mcp/
 ├── src/study_bible_mcp/
-│   ├── server.py              # MCP server (stdio + SSE transports)
+│   ├── server.py              # MCP server (stdio, SSE, and Streamable HTTP)
 │   ├── database.py            # SQLite queries (async)
-│   ├── tools.py               # 18 tool definitions
+│   ├── tools.py               # MCP tool definitions and output formatters
 │   ├── hermeneutics.py        # Genre detection & interpretation
 │   └── parsers/
 │       ├── lexicon.py         # TFLSJ, BDB, Abbott-Smith, TBESG, TBESH parsers
@@ -773,16 +787,15 @@ studybible-mcp/
 │   ├── build_database.py      # Build SQLite database
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
-│   └── test_server.py         # Manual test suite
-├── tests/
-│   └── test_tool_selection.py # Pytest: agent tool selection (71 tests)
+│   └── smoke_server.py        # Full-database manual smoke suite
+├── tests/                     # Deterministic unit and tool-selection tests
 ├── prompts/
 │   └── system_prompt.md       # Full hermeneutical framework for agents
 ├── docs/
 │   ├── SETUP.md               # Quick setup guide
 │   └── SELF_HOST.md           # Self-hosting instructions
-├── ARCHITECTURE.md            # Mermaid flowchart of all 18 tools
-├── Dockerfile                 # Multi-stage build with database
+├── ARCHITECTURE.md            # Mermaid flowchart of the tool-selection paths
+├── Dockerfile                 # Runtime image; database mounted separately
 ├── fly.toml                   # Fly.io deployment config
 └── pyproject.toml
 ```
