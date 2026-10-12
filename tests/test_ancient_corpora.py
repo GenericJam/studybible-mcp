@@ -72,11 +72,17 @@ QUMRAN_WORKS = (
     Work("damascus_document", "Damascus Document", "CD", COLUMN_LINE, ("Damascus Document",)),
     Work("pesher_habakkuk", "Pesher Habakkuk", "1QpHab", COLUMN_LINE, ("Pesher Habakkuk",)),
 )
-TEST_CORPORA = (
-    *CORPORA.values(),
+_STAND_IN_CORPORA = (
     _corpus("rabbinic", RABBINIC_WORKS),
     _corpus("pseudepigrapha", PSEUDEPIGRAPHA_WORKS, original_language="Ge'ez"),
     _corpus("qumran", QUMRAN_WORKS),
+)
+# Real corpora with a stand-in's key are replaced by the stand-in, so these
+# citation tests stay fixed as corpora are registered.
+TEST_CORPORA = (
+    *(corpus for key, corpus in CORPORA.items()
+      if key not in {stand_in.key for stand_in in _STAND_IN_CORPORA}),
+    *_STAND_IN_CORPORA,
 )
 
 SHEKALIM_HEBREW = "בְּאֶחָד בַּאֲדָר מַשְׁמִיעִין עַל הַשְּׁקָלִים"

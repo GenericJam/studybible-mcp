@@ -6,7 +6,7 @@ import pytest
 
 from study_bible_mcp import server
 from study_bible_mcp.database import StudyBibleDB, create_schema
-from study_bible_mcp.corpora import josephus
+from study_bible_mcp.corpora import CORPORA, josephus
 from study_bible_mcp.corpora.josephus import parse_josephus_work
 from study_bible_mcp.parsers.ancient_sources import import_josephus
 from study_bible_mcp.tools import format_ancient_source_results
@@ -373,13 +373,14 @@ async def test_search_accepts_all_and_rejects_unregistered_corpora(tmp_path, mon
 
     everything = await _call(db_path, monkeypatch, search, query="John Baptist", corpus="all")
     none = await _call(db_path, monkeypatch, search, query="xylophone", corpus="all")
-    unknown = await _call(db_path, monkeypatch, search, query="John", corpus="philo")
+    unknown = await _call(db_path, monkeypatch, search, query="John", corpus="nonesuch")
 
     assert "*Filters: corpus=all*" in everything
     assert "*Josephus · Jewish Antiquities ·" in everything and "Antiquities 18.116–119" in everything
     assert none == "No ancient-source passage contains any of the search terms (xylophone)."
     assert unknown == (
-        "Unsupported ancient-source corpus 'philo'. Available corpora: josephus, or 'all'."
+        f"Unsupported ancient-source corpus 'nonesuch'. Available corpora: "
+        f"{', '.join(CORPORA)}, or 'all'."
     )
 
 
