@@ -187,6 +187,16 @@ class TestCompareBiblicalVersionsSelection:
         assert best_tool("Show the LXX version alongside the MT for Deuteronomy 32:8") == "compare_biblical_versions"
 
 
+class TestSearchAncientSourcesSelection:
+    """Queries that should route to search_ancient_sources."""
+
+    def test_search_josephus(self):
+        assert best_tool("Search Josephus for John the Baptist") == "search_ancient_sources"
+
+    def test_second_temple_source(self):
+        assert best_tool("Find the ancient source passage about Herod's temple") == "search_ancient_sources"
+
+
 class TestSearchLexiconSelection:
     """Queries that should route to search_lexicon."""
 
@@ -448,7 +458,7 @@ ALL_TOOLS = {tool.name for tool in TOOLS}
 # Every test case above, collected for coverage checking
 _EXPECTED_TOOLS_TESTED = {
     "word_study", "lookup_verse", "compare_biblical_versions",
-    "search_lexicon", "get_cross_references",
+    "search_lexicon", "search_ancient_sources", "get_cross_references",
     "lookup_name", "parse_morphology", "search_by_strongs",
     "find_similar_passages", "explore_genealogy", "people_in_passage",
     "explore_person_events", "explore_place", "find_connection",

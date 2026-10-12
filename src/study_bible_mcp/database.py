@@ -8,6 +8,7 @@ import json
 import re
 import sqlite3
 import struct
+import unicodedata
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -211,6 +212,46 @@ def _lxx_row(row: dict) -> dict:
 
 def _group_key(row: dict) -> str:
     return row["canonical_reference"] or f"LXX-only {row['edition_reference']}"
+
+_BOOK_CODES = {code.lower(): code for code in BOOK_ABBREV_MAP.values()}
+_FTS_OPERATORS = {"AND", "OR", "NOT", "NEAR"}
+
+
+def fold_ancient_search_text(text: str) -> str:
+    """Fold accents and case for ancient-source search (NFC, NFD, drop marks, casefold).
+
+    Applied to the indexed Greek and to every query token, so polytonic accents,
+    breathings, iota subscripts, and final sigma do not affect matching.
+    """
+    decomposed = unicodedata.normalize("NFD", unicodedata.normalize("NFC", text))
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return unicodedata.normalize("NFC", stripped.casefold())
+
+
+def parse_ancient_biblical_reference(reference: str) -> tuple[str, int, int] | None:
+    """Parse 'Luke 21', 'Luke 21:5', or 'Luke 21:5-6' into (book code, sort start, sort end)."""
+    match = re.fullmatch(
+        r"\s*((?:[1-4]\s*)?[A-Za-z]+(?:\s+[A-Za-z]+)*)\.?\s+(\d+)(?::(\d+)(?:\s*[-–]\s*(\d+))?)?\s*",
+        reference,
+    )
+    if not match:
+        return None
+    book, chapter, verse, verse_end = match.groups()
+    key = re.sub(r"^([1-4])\s*", r"\1 ", re.sub(r"\s+", " ", book.strip().lower()))
+    code = (
+        BOOK_ABBREV_MAP.get(key)
+        or BOOK_ABBREV_MAP.get(key.replace(" ", ""))
+        or _BOOK_CODES.get(key.replace(" ", ""))
+    )
+    chapter_number = int(chapter)
+    if code is None or chapter_number < 1:
+        return None
+    if verse is None:
+        return code, chapter_number * 1000, chapter_number * 1000 + 999
+    start, end = int(verse), int(verse_end or verse)
+    if start < 1 or end < start or end > 999:
+        return None
+    return code, chapter_number * 1000 + start, chapter_number * 1000 + end
 
 
 def _sort_theme_lists(rows: list[dict]) -> list[dict]:
@@ -1634,6 +1675,133 @@ class StudyBibleDB:
         return rows
 
 
+    async def search_ancient_sources(
+        self,
+        query: str,
+        corpus: str = "josephus",
+        biblical_reference: str | None = None,
+        period: str | None = None,
+        limit: int = 4,
+    ) -> dict:
+        """Full-text search licensed ancient sources with optional indexed filters.
+
+        Only the passage text (English and folded Greek) is searched; the work
+        title and reference columns are display metadata, so a query word that
+        only appears in a title ("Jewish", "War", "Life") does not match.
+
+        Returns a dict with ``status`` (``ok``, ``invalid_query``,
+        ``invalid_reference``, ``corpus_missing``, ``no_link``, ``no_match``),
+        ``rows``, ``terms`` (the folded search terms), ``match`` (``all`` when
+        every term matched, ``any`` for the any-term fallback), and for
+        ``no_link`` the corpus-wide ``link_count`` and ``linked_passage_count``.
+        """
+        terms: list[str] = []
+        for token in re.findall(r"\w+", unicodedata.normalize("NFC", query)):
+            if token in _FTS_OPERATORS:
+                continue
+            for term in re.findall(r"\w+", fold_ancient_search_text(token)):
+                if term not in terms:
+                    terms.append(term)
+        result: dict[str, Any] = {"status": "ok", "rows": [], "terms": terms, "match": None}
+        if not terms:
+            result["status"] = "invalid_query"
+            return result
+
+        link_range = None
+        if biblical_reference:
+            link_range = parse_ancient_biblical_reference(biblical_reference)
+            if link_range is None:
+                result["status"] = "invalid_reference"
+                return result
+
+        try:
+            present = await self._fetchone(
+                "SELECT 1 FROM ancient_source_passages WHERE corpus = ? LIMIT 1",
+                (corpus,),
+            )
+        except sqlite3.OperationalError:
+            present = None
+        if present is None:
+            result["status"] = "corpus_missing"
+            return result
+
+        where = ["ancient_source_passages_fts MATCH ?", "p.corpus = ?"]
+        params: list[Any] = [corpus]
+        if period:
+            where.append("(',' || p.period_tags || ',') LIKE ?")
+            params.append(f"%,{period},%")
+        if link_range:
+            link_condition = """EXISTS (
+                       SELECT 1 FROM ancient_source_biblical_links bl
+                       WHERE bl.passage_id = p.id
+                         AND bl.biblical_book = ?
+                         AND bl.sort_start <= ?
+                         AND bl.sort_end >= ?
+                   )"""
+            linked = await self._fetchone(
+                f"""SELECT 1 FROM ancient_source_passages p
+                    WHERE p.corpus = ? AND {link_condition} LIMIT 1""",
+                (corpus, link_range[0], link_range[2], link_range[1]),
+            )
+            if linked is None:
+                coverage = await self._fetchone(
+                    """SELECT COUNT(*) AS link_count,
+                              COUNT(DISTINCT bl.passage_id) AS linked_passage_count
+                       FROM ancient_source_biblical_links bl
+                       JOIN ancient_source_passages p ON p.id = bl.passage_id
+                       WHERE p.corpus = ?""",
+                    (corpus,),
+                )
+                result.update(status="no_link", **coverage)
+                return result
+            where.append(link_condition)
+            params.extend((link_range[0], link_range[2], link_range[1]))
+
+        for match, operator in (("all", " AND "), ("any", " OR ")):
+            if match == "any" and len(terms) == 1:
+                break
+            terms_query = operator.join(f'"{term}"' for term in terms)
+            match_query = f"{{text original_text_folded}} : ({terms_query})"
+            rows = await self._fetchall(
+                f"""SELECT p.*, bm25(ancient_source_passages_fts) AS rank
+                    FROM ancient_source_passages_fts
+                    JOIN ancient_source_passages p
+                      ON p.id = ancient_source_passages_fts.passage_id
+                    WHERE {' AND '.join(where)}
+                    ORDER BY rank, p.work_title, p.book_number,
+                             CAST(p.section_number AS INTEGER)
+                    LIMIT ?""",
+                [match_query, *params, limit],
+            )
+            if rows:
+                result["match"] = match
+                break
+        if not rows:
+            result["status"] = "no_match"
+            return result
+        result["rows"] = await self._attach_ancient_biblical_links(rows)
+        return result
+
+    async def _attach_ancient_biblical_links(self, rows: list[dict]) -> list[dict]:
+        """Attach editorial biblical links to ancient-source passage rows."""
+        passage_ids = [row["id"] for row in rows]
+        placeholders = ",".join("?" for _ in passage_ids)
+        links = await self._fetchall(
+            f"""SELECT passage_id, biblical_book, sort_start, sort_end,
+                       relationship_note
+                FROM ancient_source_biblical_links
+                WHERE passage_id IN ({placeholders})
+                ORDER BY biblical_book, sort_start""",
+            passage_ids,
+        )
+        links_by_passage: dict[int, list[dict]] = {}
+        for link in links:
+            links_by_passage.setdefault(link["passage_id"], []).append(link)
+        for row in rows:
+            row["biblical_links"] = links_by_passage.get(row["id"], [])
+        return rows
+
+
     async def get_textual_variants(self, reference: str) -> list[dict]:
         """Get textual variants for a reference, with manuscript witnesses."""
         normalized = self._normalize_reference(reference)
@@ -2188,6 +2356,54 @@ def create_schema(conn: sqlite3.Connection):
             ON biblical_version_verses(canonical_book, canonical_chapter, canonical_verse);
         CREATE INDEX IF NOT EXISTS idx_bvv_edition
             ON biblical_version_verses(edition_book, edition_chapter, edition_verse);
+
+        -- Licensed ancient-source passages and full-text index.
+        CREATE TABLE IF NOT EXISTS ancient_source_passages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            corpus TEXT NOT NULL,
+            author TEXT NOT NULL,
+            work_key TEXT NOT NULL,
+            work_title TEXT NOT NULL,
+            reference TEXT NOT NULL,
+            alternate_reference TEXT,
+            book_number INTEGER NOT NULL,
+            section_number TEXT NOT NULL,
+            section_end INTEGER NOT NULL,
+            editorial_heading TEXT,
+            text TEXT NOT NULL,
+            original_text TEXT,
+            period_tags TEXT NOT NULL,
+            edition TEXT NOT NULL,
+            translation TEXT,
+            license TEXT NOT NULL,
+            source_url TEXT NOT NULL,
+            UNIQUE(corpus, work_key, reference)
+        );
+        CREATE INDEX IF NOT EXISTS idx_asp_corpus_period
+            ON ancient_source_passages(corpus, period_tags);
+        CREATE INDEX IF NOT EXISTS idx_asp_reference
+            ON ancient_source_passages(corpus, work_key, book_number, section_number);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS ancient_source_passages_fts USING fts5(
+            passage_id UNINDEXED,
+            work_title,
+            reference,
+            text,
+            original_text_folded,
+            tokenize = 'porter unicode61 remove_diacritics 2'
+        );
+
+        CREATE TABLE IF NOT EXISTS ancient_source_biblical_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            passage_id INTEGER NOT NULL REFERENCES ancient_source_passages(id),
+            biblical_book TEXT NOT NULL,
+            sort_start INTEGER NOT NULL,
+            sort_end INTEGER NOT NULL,
+            relationship_note TEXT NOT NULL,
+            UNIQUE(passage_id, biblical_book, sort_start, sort_end)
+        );
+        CREATE INDEX IF NOT EXISTS idx_asbl_biblical
+            ON ancient_source_biblical_links(biblical_book, sort_start, sort_end);
 
         -- Textual variants (MT vs DSS/LXX/SP)
         CREATE TABLE IF NOT EXISTS textual_variants (

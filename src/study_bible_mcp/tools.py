@@ -26,6 +26,8 @@ emitted as a Mermaid code block within that text.
 """
 
 import json
+import re
+import unicodedata
 
 from mcp.types import Tool, ToolAnnotations
 
@@ -175,6 +177,68 @@ Rows are grouped by canonical MT/English reference and keep each edition's own r
                 },
             },
             "required": ["reference"],
+        },
+    ),
+    Tool(
+        name="search_ancient_sources",
+        annotations=ToolAnnotations(
+            title="Search Ancient Sources",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+        ),
+        description="""Search licensed primary-source corpora for Second Temple and
+early Roman Jewish history. The initial corpus is all four surviving works of
+Flavius Josephus in Whiston's English translation paired with Niese's Greek.
+
+Each result is one Whiston section with every Niese Greek section it spans,
+referenced as a Niese span ('Antiquities 15.317–322') plus Whiston's numbering
+('Whiston 15.9.3'). English search is stemmed (build/building); Greek search
+ignores accents, breathings, and case. Passages containing every query word
+are returned first; if none contain all of them, passages matching any word are
+returned and the output says so.
+
+Only the passage text is searched, not work titles or references. Results are
+source passages, not modern historical judgments. Each result gives the work,
+reference, editorial period tags, and an excerpt around the first match; the
+edition, translation, license, and source are listed once at the end. Whiston's
+chapter headings are shown as editorial metadata, not as Josephus's text. `biblical_reference` uses a
+small curated set of editorial narrative-overlap links and is never inferred
+from keyword overlap.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "English or Greek words to search for (e.g. 'John Baptist', 'Herod temple', or 'βαπτισμῷ'). Search operators are ignored.",
+                },
+                "corpus": {
+                    "type": "string",
+                    "enum": ["josephus"],
+                    "default": "josephus",
+                    "description": "Licensed corpus to search. Default: josephus",
+                },
+                "biblical_reference": {
+                    "type": "string",
+                    "description": "Optional chapter, verse, or verse range (e.g. 'Luke 21', 'Luke 21:5', 'Luke 21:5-6') limiting results to passages with a curated editorial link overlapping it",
+                },
+                "period": {
+                    "type": "string",
+                    "enum": [
+                        "biblical", "persian", "second_temple", "hellenistic",
+                        "hasmonean", "herodian", "roman", "first_jewish_revolt",
+                    ],
+                    "description": "Optional editorial period tag",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "default": 4,
+                    "description": "Maximum passages. Default: 4",
+                },
+            },
+            "required": ["query"],
         },
     ),
     Tool(
@@ -1245,6 +1309,122 @@ def format_biblical_version_comparison(
     lines.append(f"- Verse mapping: {VERSE_MAPPING_CREDIT}")
     if brenton_note:
         lines.append(f"\n*Brenton's English: {brenton_note}*")
+    return "\n".join(lines).rstrip()
+
+
+def _format_ancient_biblical_link(link: dict) -> str:
+    start_chapter, start_verse = divmod(link["sort_start"], 1000)
+    end_chapter, end_verse = divmod(link["sort_end"], 1000)
+    start = f"{link['biblical_book']} {start_chapter}:{start_verse}"
+    end = (
+        f"{end_verse}"
+        if start_chapter == end_chapter
+        else f"{end_chapter}:{end_verse}"
+    )
+    reference = start if link["sort_start"] == link["sort_end"] else f"{start}–{end}"
+    return f"{reference} — {link['relationship_note']}"
+
+
+def _fold_for_match(text: str) -> str:
+    """Case- and accent-fold text one character at a time, keeping positions."""
+    folded = []
+    for ch in text:
+        base = "".join(
+            c for c in unicodedata.normalize("NFD", ch) if not unicodedata.combining(c)
+        ).casefold()
+        folded.append(base[:1] or ch)
+    return "".join(folded)
+
+
+def _match_excerpt(text: str, query: str, limit: int) -> str:
+    """Return up to ``limit`` characters of ``text`` around the first query match.
+
+    Matching folds case and accents and accepts a word stem (``build`` finds
+    ``building``), mirroring the search index. Without a match the excerpt
+    starts at the beginning. Ellipses mark text cut at either end.
+    """
+    if len(text) <= limit:
+        return text
+    folded = _fold_for_match(text)
+    positions = []
+    for word in re.findall(r"\w+", _fold_for_match(query)):
+        stem = word if len(word) <= 5 else word[: len(word) - 2]
+        found = re.search(rf"\b{re.escape(stem)}", folded)
+        if found:
+            positions.append(found.start())
+    start = max(0, min(positions) - limit // 5) if positions else 0
+    if start:
+        space = text.find(" ", start)
+        start = space + 1 if 0 <= space < start + 40 else start
+    end = min(len(text), start + limit)
+    if end < len(text):
+        space = text.rfind(" ", start, end)
+        end = space if space > start + limit // 2 else end
+    return f"{'…' if start else ''}{text[start:end]}{'…' if end < len(text) else ''}"
+
+
+def format_ancient_source_results(
+    query: str,
+    rows: list[dict],
+    corpus: str,
+    biblical_reference: str | None = None,
+    period: str | None = None,
+    match: str = "all",
+) -> str:
+    """Format primary-source results compactly, with provenance listed once.
+
+    Each result shows a heading, its work and editorial period tags, an
+    excerpt of the English around the first match, and a shorter Greek
+    excerpt (a longer, match-centred one when the query is Greek).
+    """
+    filters = [f"corpus={corpus}"]
+    if biblical_reference:
+        filters.append(f"biblical_reference={biblical_reference}")
+    if period:
+        filters.append(f"period={period}")
+    lines = [
+        f"## Ancient Source Search: {query}",
+        "",
+        f"*Filters: {', '.join(filters)}*",
+        "",
+    ]
+    if match == "any":
+        lines.extend([
+            "*No passage contains all terms; showing passages matching any term.*",
+            "",
+        ])
+    greek_query = any("\u0370" <= ch <= "\u03ff" or "\u1f00" <= ch <= "\u1fff" for ch in query)
+    sources: dict[tuple, list[str]] = {}
+    for row in rows:
+        heading = f"### {row['author']}, {row['reference']}"
+        if row.get("alternate_reference"):
+            heading += f" ({row['alternate_reference']})"
+        lines.append(heading)
+        lines.append(f"*{row['work_title']} · editorial period tags: {row['period_tags']}*")
+        if row.get("editorial_heading"):
+            lines.append(f"*Whiston chapter heading (editorial): {row['editorial_heading']}*")
+        key = (row["edition"], row["translation"], row["license"])
+        if row["source_url"] not in sources.setdefault(key, []):
+            sources[key].append(row["source_url"])
+        lines.extend(["", _match_excerpt(row["text"], query, 1500)])
+        if row.get("original_text"):
+            greek = (
+                _match_excerpt(row["original_text"], query, 1200)
+                if greek_query
+                else _match_excerpt(row["original_text"], "", 600)
+            )
+            lines.extend(["", f"**Greek:** {greek}"])
+        if row.get("biblical_links"):
+            lines.extend(["", "**Editorial biblical links:**"])
+            for link in row["biblical_links"]:
+                lines.append(f"- {_format_ancient_biblical_link(link)}")
+        lines.extend(["", "---", ""])
+    lines.append("**Sources**")
+    for (edition, translation, license_), urls in sources.items():
+        lines.append(
+            f"- Greek: {edition}. English: {translation}. License: {license_}. "
+            + " ".join(urls)
+        )
     return "\n".join(lines).rstrip()
 
 

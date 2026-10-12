@@ -31,10 +31,12 @@ This guide covers running your own instance of the Study Bible MCP server.
    ```bash
    python scripts/download_stepbible.py
    python scripts/download_biblical_versions.py
+   python scripts/download_ancient_sources.py
    ```
-   The second command downloads the pinned 59-book Rahlfs morphology corpus,
-   explicit MT/LXX versification mappings, and public-domain Brenton English and
-   Greek USFM. It validates source checksums before import.
+   The additional commands download the pinned 59-book Rahlfs morphology
+   corpus, explicit MT/LXX versification mappings, public-domain Brenton English
+   and Greek USFM, and the licensed Josephus Greek/English corpus. They validate
+   source checksums before import.
 5. **Build the database**
    ```bash
    python scripts/build_database.py

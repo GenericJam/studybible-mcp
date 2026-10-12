@@ -223,6 +223,41 @@ New Testament references, unparseable references, and references with no
 matching verses each return a specific message. A database without the
 Septuagint table tells you to run `python scripts/upgrade_database.py`.
 
+#### `search_ancient_sources`
+
+Search licensed primary-source corpora for Jewish history. The initial
+`josephus` corpus contains 2,304 Whiston sections from *Jewish Antiquities*,
+*The Jewish War*, *Life*, and *Against Apion*. Each section is paired with
+every Niese Greek section it spans and referenced as a Niese span plus
+Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Each
+result shows up to 1,500 characters of English around the first match and a
+shorter Greek excerpt (match-centred when the query is Greek); the edition,
+translation, license, and pinned source are listed once at the end. Up to 4
+passages are returned by default.
+
+```text
+search_ancient_sources(
+  query="John Baptist",
+  corpus="josephus",
+  biblical_reference="Mark 6:20",
+  period="second_temple",
+  limit=4
+)
+```
+
+Only the passage text is searched, so a word that appears only in a work
+title (`Jewish`, `War`, `Life`) does not match every passage of that work.
+English search is stemmed (`build` matches `building`); Greek search ignores
+accents, breathings, and case (`βαπτισμω` matches `βαπτισμῷ`). Passages
+containing every query word come first; when none do, passages matching any
+word are returned with an explicit note. `biblical_reference` accepts a
+chapter, verse, or verse range (`Luke 21`, `Luke 21:5`, `Luke 21:5-6`) and
+filters to 33 curated narrative-overlap links, each checked against the linked
+passage text. Period tags, biblical links, and Whiston's chapter headings are
+labelled editorial metadata; they are not presented as claims made by
+Josephus. Empty results say whether the corpus is missing, the reference is
+unsupported, the reference has no curated link, or nothing matched.
+
 #### 2. `word_study`
 
 Deep dive into a Greek or Hebrew word's meaning, usage, and etymology. Greek entries include both the full Liddell-Scott-Jones (LSJ) definition for classical breadth and the Abbott-Smith definition for NT-specific insight (with LXX/Hebrew equivalents, synonym discussions, and NT occurrence counts). Hebrew entries include the full Brown-Driver-Briggs (BDB) definition.
@@ -843,11 +878,13 @@ studybible-mcp/
 │       ├── acai.py            # ACAI entity annotation parser
 │       ├── ane_context.py     # ANE cultural context parser
 │       ├── biblical_versions.py # MT/LXX text, morphology, and versification
+│       ├── ancient_sources.py # Josephus TEI parser and corpus metadata
 │       ├── tagged_text.py     # TAGNT/TAHOT morphology parsers
 │       └── proper_names.py    # TIPNR name parser
 ├── scripts/
 │   ├── download_stepbible.py  # Download base source data (--aquifer flag)
 │   ├── download_biblical_versions.py # Download pinned LXX/Brenton sources
+│   ├── download_ancient_sources.py # Download pinned Josephus sources
 │   ├── build_database.py      # Build SQLite database
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
@@ -910,6 +947,31 @@ Brenton's Greek is stored only for the verses where it differs from Rahlfs
 (about 5 MB). `build_database.py` stops with an error if `data/lxx` is present
 but incomplete (any of the 59 morphology books, the mapping, a required Brenton
 English or Greek book, or a manifest-listed file is missing or truncated).
+
+### Josephus
+
+`search_ancient_sources` uses all four Josephus works from
+[PerseusDL canonical-greekLit](https://github.com/PerseusDL/canonical-greekLit),
+pinned to commit `01b725d835e6e733062ffd79e0efdbae1ba06e5c`. The English TEI
+has one division per Whiston section, labelled with the Niese section where it
+starts; the Greek TEI has one division per Niese section. The importer joins
+every Greek section from each English start up to the next (the last section
+of a book runs to the book's last Greek section), so no Niese Greek is dropped;
+the later Greek book summaries (`arg`) are excluded. One mislabelled English
+division (Whiston 17.13.1, labelled `13`) is corrected to Niese 17.339 from the
+Greek milestone and text. Editor notes and Whiston's chapter headings are kept
+out of the primary-source text and the search index; headings are stored as
+editorial metadata. The FTS5 index uses Porter stemming for English and an
+accent-folded copy of the Greek. Each TEI file declares CC BY-SA 4.0; downloads
+are checked against their pinned Git blob hashes, and the build fails if any of
+the eight TEI files is missing.
+
+Biblical links are a small, separate editorial index of direct narrative
+overlap. Each targets a Niese section, attaches to the passage whose span
+contains it, and was checked against the passage text; the import fails if a
+link does not resolve. They do not assert literary dependence or historical
+agreement, and the Testimonium Flavianum link is marked as of disputed
+authenticity.
 
 ### BDB Hebrew Lexicon
 
@@ -1024,6 +1086,7 @@ MIT License. See [LICENSE](LICENSE).
 
 Data from STEPBible is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 OpenScriptorium LXX morphology and MT/LXX verse mappings (derived in part from STEPBible's TVTMS) are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the Rahlfs Greek text and Brenton's English translation and Greek text are public domain.
+The Perseus Josephus Greek and English TEI editions are licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Data from BibleAquifer and ACAI is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 Torah Weave data from Moshe Kline ([chaver.com](https://www.chaver.com/)) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 BDB, Abbott-Smith, the Treasury of Scripture Knowledge, and the works of John Owen are public domain.
@@ -1037,6 +1100,7 @@ The theology and ANE entries are original summary prose written for this project
 - [OpenScriptorium](https://github.com/OpenScriptorium/lxx-morph) for Rahlfs LXX morphology and explicit MT/LXX verse mappings
 - [STEPBible.org / Tyndale House Cambridge](https://github.com/STEPBible/STEPBible-Data) for TVTMS, the versification data behind those mappings
 - [eBible.org](https://ebible.org/details.php?id=eng-Brenton) for the public-domain Brenton Septuagint, English and [Greek](https://ebible.org/details.php?id=grcbrent)
+- [Perseus Digital Library](https://github.com/PerseusDL/canonical-greekLit) for the licensed Josephus Greek and English editions
 - [BibleAquifer](https://github.com/BibleAquifer) for study notes, dictionary, translation notes, and key terms
 - [eliranwong](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon) for the unabridged BDB Hebrew lexicon
 - [translatable-exegetical-tools](https://github.com/translatable-exegetical-tools/Abbott-Smith) for the Abbott-Smith Greek Lexicon TEI XML edition

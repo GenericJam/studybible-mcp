@@ -46,6 +46,7 @@ data/acai/
 data/cross_references/
 data/dss/
 data/lxx/
+data/ancient_sources/
 
 # Database (built from data, not committed)
 db/*.db

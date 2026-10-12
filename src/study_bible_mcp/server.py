@@ -37,6 +37,7 @@ from .tools import (
     format_genealogy, format_person_events, format_place_history,
     format_passage_entities, format_connection_path,
     format_enriched_verse, format_biblical_version_comparison,
+    format_ancient_source_results,
     mermaid_genealogy, mermaid_connection_path, mermaid_person_timeline,
     mermaid_place_network,
     format_study_notes, format_dictionary_article, format_key_terms,
@@ -351,6 +352,85 @@ async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextCon
             include_morphology=args.get("include_morphology", False),
             numbering=result["numbering"],
             note=" ".join(part for part in (cap_note, lxx_only_note) if part),
+        )
+    )
+
+
+async def handle_search_ancient_sources(args: dict[str, Any]) -> list[TextContent]:
+    """Search Josephus with explicit corpus, period, and biblical-link filters."""
+    query = args.get("query", "").strip()
+    if not query:
+        return text("Please provide words to search in the ancient source text.")
+
+    corpus = str(args.get("corpus", "josephus")).lower()
+    if corpus != "josephus":
+        return text("Unsupported ancient-source corpus. Available corpus: josephus.")
+    period = args.get("period")
+    periods = {
+        "biblical", "persian", "second_temple", "hellenistic",
+        "hasmonean", "herodian", "roman", "first_jewish_revolt",
+    }
+    if period and period not in periods:
+        return text(f"Unsupported period: {period}.")
+    try:
+        limit = int(args.get("limit", 4))
+    except (TypeError, ValueError):
+        return text("'limit' must be an integer from 1 to 20.")
+    if not 1 <= limit <= 20:
+        return text("'limit' must be an integer from 1 to 20.")
+
+    biblical_reference = (args.get("biblical_reference") or "").strip() or None
+    result = await db.search_ancient_sources(
+        query,
+        corpus=corpus,
+        biblical_reference=biblical_reference,
+        period=period,
+        limit=limit,
+    )
+    status = result["status"]
+    if status == "invalid_query":
+        return text(
+            "Please provide words to search in the ancient source text. "
+            "Search operators (AND, OR, NOT, NEAR) are ignored."
+        )
+    if status == "invalid_reference":
+        return text(
+            f"Unsupported biblical_reference '{biblical_reference}'. Use a book "
+            "name with a chapter, verse, or verse range, e.g. 'Luke 21', "
+            "'Luke 21:5', or 'Luke 21:5-6'."
+        )
+    if status == "corpus_missing":
+        return text(
+            "The Josephus corpus is not in this database (the "
+            "ancient_source_passages table is missing or empty). Run "
+            "`python scripts/upgrade_database.py` to add it."
+        )
+    if status == "no_link":
+        return text(
+            f"No Josephus passage has an editorial biblical link covering "
+            f"{biblical_reference}. Biblical links are curated narrative "
+            f"overlaps, never inferred from wording; {result['link_count']} "
+            f"links currently cover {result['linked_passage_count']} Josephus "
+            "passages. Search without biblical_reference to find passages by "
+            "wording."
+        )
+    if status == "no_match":
+        filters = [f"biblical_reference={biblical_reference}"] if biblical_reference else []
+        if period:
+            filters.append(f"period={period}")
+        scope = f" with filters {', '.join(filters)}" if filters else ""
+        return text(
+            "No Josephus passage contains any of the search terms "
+            f"({', '.join(result['terms'])}){scope}."
+        )
+    return text(
+        format_ancient_source_results(
+            query,
+            result["rows"],
+            corpus,
+            biblical_reference=biblical_reference,
+            period=period,
+            match=result["match"],
         )
     )
 
@@ -1231,6 +1311,7 @@ _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
     "compare_biblical_versions": handle_compare_biblical_versions,
+    "search_ancient_sources": handle_search_ancient_sources,
     "search_lexicon": handle_search_lexicon,
     "get_cross_references": handle_get_cross_references,
     "lookup_name": handle_lookup_name,
