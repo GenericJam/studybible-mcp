@@ -6,12 +6,21 @@
 
 - Added `search_ancient_sources` with full-text, corpus, biblical-reference,
   editorial-period, and result-limit controls.
-- Added 2,304 sections across all four surviving Josephus works, pairing
-  Niese's Greek with Whiston's English.
-- Added checksum verification at a pinned Perseus commit and preserved
-  edition, translation, license, and source URL on each passage.
-- Kept editor notes out of primary-source text and labelled period/biblical
-  links as separate editorial metadata.
+- Added 2,304 Whiston sections across all four surviving Josephus works, each
+  paired with every Niese Greek section it spans and referenced as a Niese span
+  plus Whiston's numbering (`Antiquities 18.116–119 (Whiston 18.5.2)`).
+- Added Porter-stemmed English search, accent-insensitive Greek search, and an
+  explicitly labelled any-term fallback when no passage contains every word.
+- Added 33 curated narrative-overlap biblical links, each verified against the
+  passage text and resolved by section containment; `biblical_reference`
+  accepts chapters, verses, and verse ranges.
+- Added checksum verification at a pinned Perseus commit, a build check for all
+  eight TEI files, and preserved edition, translation, license, and source URL
+  on each passage.
+- Kept editor notes and Whiston's chapter headings out of primary-source text,
+  and labelled period tags, headings, and biblical links as editorial metadata.
+- Empty results distinguish a missing corpus, an unsupported reference, a
+  reference without curated links, and no matching passage.
 
 ---
 

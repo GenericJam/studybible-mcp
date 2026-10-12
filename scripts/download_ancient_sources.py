@@ -17,6 +17,7 @@ PERSEUS_COMMIT = "01b725d835e6e733062ffd79e0efdbae1ba06e5c"
 API_BASE = "https://api.github.com/repos/PerseusDL/canonical-greekLit/contents"
 WORK_IDS = ("tlg001", "tlg002", "tlg003", "tlg004")
 _TEXT_RE = re.compile(r"^tlg0526\.tlg00[1-4]\.perseus-(?:eng2|grc2)\.xml$")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 console = Console()
 
 
@@ -71,7 +72,7 @@ def _download_josephus(client: httpx.Client, target: Path, force: bool) -> dict:
 @click.option(
     "--data-dir",
     type=click.Path(path_type=Path),
-    default=Path("data/ancient_sources"),
+    default=PROJECT_ROOT / "data" / "ancient_sources",
 )
 @click.option("--force", is_flag=True, help="Redownload files already present")
 def main(data_dir: Path, force: bool) -> None:

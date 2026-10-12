@@ -7,6 +7,8 @@ import sqlite3
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from ..database import fold_ancient_search_text
+
 
 PERSEUS_COMMIT = "01b725d835e6e733062ffd79e0efdbae1ba06e5c"
 PERSEUS_BASE_URL = (
@@ -40,40 +42,76 @@ WORKS = {
 
 # Editorial links, intentionally separate from Josephus's text. These identify
 # direct narrative overlap, not literary dependence or historical agreement.
+# Each link targets one Niese section and is attached to the imported passage
+# whose section span contains it; import fails if any link does not resolve.
+# Fields: work_key, book, Niese section, biblical book, chapter, verse, end
+# chapter, end verse, note. The comment on each entry names what was verified
+# in the pinned Whiston text of the passage containing that Niese section.
 _BIBLICAL_LINKS = (
-    ("antiquities", "Antiquities 1.27", "Gen", 1, 1, 1, 31, "Narrative overlap: creation"),
-    ("antiquities", "Antiquities 1.34", "Gen", 2, 4, 2, 25, "Narrative overlap: creation of humanity"),
-    ("antiquities", "Antiquities 1.40", "Gen", 3, 1, 3, 24, "Narrative overlap: Eden and expulsion"),
-    ("antiquities", "Antiquities 1.72", "Gen", 6, 1, 9, 29, "Narrative overlap: Noah and the flood"),
-    ("antiquities", "Antiquities 2.205", "Exo", 2, 1, 2, 25, "Narrative overlap: birth and flight of Moses"),
-    ("antiquities", "Antiquities 2.311", "Exo", 12, 1, 14, 31, "Narrative overlap: exodus from Egypt"),
-    ("antiquities", "Antiquities 3.89", "Exo", 19, 1, 20, 26, "Narrative overlap: Sinai and the law"),
-    ("antiquities", "Antiquities 18.116", "Mrk", 6, 17, 6, 29, "Related account: death of John the Baptist"),
+    ("antiquities", 1, 27, "Gen", 1, 1, 1, 31, "Narrative overlap: creation"),  # "In the beginning God created"
+    ("antiquities", 1, 34, "Gen", 2, 4, 2, 25, "Narrative overlap: creation of humanity"),  # "God took dust from the ground"
+    ("antiquities", 1, 40, "Gen", 3, 1, 3, 24, "Narrative overlap: Eden and expulsion"),  # garden, serpent
+    ("antiquities", 1, 72, "Gen", 6, 1, 9, 29, "Narrative overlap: Noah and the flood"),  # "angels of God accompanied with women", Noah
+    ("antiquities", 2, 224, "Exo", 2, 1, 2, 10, "Narrative overlap: birth of Moses"),  # Thermuthis finds the cradle
+    ("antiquities", 2, 254, "Exo", 2, 11, 2, 22, "Narrative overlap: flight of Moses"),  # "he took his flight through the deserts"
+    ("antiquities", 2, 311, "Exo", 12, 1, 14, 31, "Narrative overlap: exodus from Egypt"),  # last plague, Passover sacrifice
+    ("antiquities", 3, 89, "Exo", 19, 1, 20, 26, "Narrative overlap: Sinai and the law"),  # God speaking at the mountain, two tables
+    ("antiquities", 15, 380, "Jhn", 2, 20, 2, 20, "Narrative overlap: Herod begins rebuilding the temple"),  # "eighteenth year ... to build ... the temple"
+    ("antiquities", 15, 391, "Mrk", 13, 1, 13, 2, "Narrative overlap: the stones of Herod's temple"),  # "stones that were white and strong"
+    ("antiquities", 15, 391, "Luk", 21, 5, 21, 6, "Narrative overlap: the stones and dedicated spoils of Herod's temple"),  # stones; spoils "dedicated to the temple"
+    ("antiquities", 17, 191, "Mat", 2, 19, 2, 19, "Narrative overlap: death of Herod the Great"),  # "he died, the fifth day after ... Antipater"
+    ("antiquities", 17, 317, "Mat", 2, 22, 2, 22, "Narrative overlap: Archelaus made ethnarch over Judea"),  # Archelaus ethnarch; Judea
+    ("antiquities", 18, 1, "Luk", 2, 1, 2, 2, "Narrative overlap: census under Cyrenius (Quirinius)"),  # Cyrenius, taxation
+    ("antiquities", 18, 4, "Act", 5, 37, 5, 37, "Narrative overlap: Judas the Gaulonite and the census"),  # "Judas, a Gaulonite"
+    ("antiquities", 18, 23, "Act", 5, 37, 5, 37, "Narrative overlap: Judas the Galilean"),  # "Judas the Galilean"
+    ("antiquities", 18, 35, "Luk", 3, 2, 3, 2, "Narrative overlap: Ananus deposed and Caiaphas made high priest"),  # Ananus, Joseph Caiaphas
+    ("antiquities", 18, 35, "Jhn", 18, 13, 18, 14, "Narrative overlap: Caiaphas made high priest"),  # Joseph Caiaphas
+    ("antiquities", 18, 63, "Luk", 23, 1, 23, 25, "Narrative overlap: Jesus condemned under Pilate (Testimonium Flavianum; disputed authenticity)"),  # Jesus, Pilate, cross
+    ("antiquities", 18, 95, "Jhn", 18, 13, 18, 14, "Narrative overlap: Caiaphas removed from the high priesthood"),  # Vitellius deprives Caiaphas
+    ("antiquities", 18, 116, "Mrk", 6, 17, 6, 29, "Related account: death of John the Baptist"),  # John "called the Baptist", Herod
+    ("antiquities", 19, 343, "Act", 12, 20, 12, 23, "Narrative overlap: death of Agrippa I at Caesarea"),  # Cesarea, acclaimed a god, five days
+    ("antiquities", 20, 97, "Act", 5, 36, 5, 36, "Narrative overlap: Theudas, under the procurator Fadus"),  # Theudas, Jordan
+    ("antiquities", 20, 141, "Act", 24, 24, 24, 24, "Narrative overlap: Felix and Drusilla"),  # Felix, Drusilla
+    ("antiquities", 20, 169, "Act", 21, 38, 21, 38, "Narrative overlap: the Egyptian prophet"),  # out of Egypt, Mount of Olives
+    ("antiquities", 20, 200, "Gal", 1, 19, 1, 19, "Narrative overlap: James, the brother of Jesus"),  # "the brother of Jesus ... James"
+    ("jewish_war", 2, 118, "Act", 5, 37, 5, 37, "Narrative overlap: Judas the Galilean"),  # "a certain Galilean, whose name was Judas"
+    ("jewish_war", 2, 261, "Act", 21, 38, 21, 38, "Narrative overlap: the Egyptian false prophet"),  # Egyptian, Mount of Olives
+    ("jewish_war", 6, 249, "Mrk", 13, 2, 13, 2, "Narrative overlap: burning of the temple"),  # holy house "doomed it to the fire"
+    ("jewish_war", 6, 249, "Luk", 21, 6, 21, 6, "Narrative overlap: burning of the temple"),
+    ("jewish_war", 6, 420, "Luk", 21, 20, 21, 24, "Narrative overlap: Jerusalem besieged and its people taken captive"),  # "shut up by an army", "carried captive"
+    ("jewish_war", 7, 1, "Mrk", 13, 2, 13, 2, "Narrative overlap: demolition of the city and temple"),  # "demolish the entire city and temple"
+    ("jewish_war", 7, 1, "Luk", 21, 6, 21, 6, "Narrative overlap: demolition of the city and temple"),
 )
 
+# Whiston section 17.13.1 is labelled n="13" in the English TEI. The Greek
+# TEI's Whiston_chapter 13 milestone and the text itself (Archelaus deposes
+# Joazar, son of Boethus) place it at Niese 17.339.
+_ENGLISH_SECTION_CORRECTIONS = {("tlg001", 17, "13"): 339}
+
 _NS = {"tei": "http://www.tei-c.org/ns/1.0"}
-_SKIP_TEXT_ELEMENTS = {"note", "pb"}
+_TEI = "{http://www.tei-c.org/ns/1.0}"
+_SKIP_TEXT_ELEMENTS = {"note", "pb", "head"}
 
 
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-def _source_text(element: ET.Element) -> str:
+def _source_text(element: ET.Element, skip: set[str] = _SKIP_TEXT_ELEMENTS) -> str:
+    """Return element text without editorial children, preserving TEI spacing."""
     parts: list[str] = []
 
     def visit(node: ET.Element) -> None:
-        if _local_name(node.tag) in _SKIP_TEXT_ELEMENTS:
-            return
         if node.text:
             parts.append(node.text)
         for child in node:
-            visit(child)
+            if _local_name(child.tag) not in skip:
+                visit(child)
             if child.tail:
                 parts.append(child.tail)
 
     visit(element)
-    return re.sub(r"\s+", " ", " ".join(parts)).strip()
+    return re.sub(r"\s+", " ", "".join(parts)).strip()
 
 
 def _section_elements(root: ET.Element) -> list[tuple[int, ET.Element]]:
@@ -119,8 +157,69 @@ def _validate_license(root: ET.Element, path: Path) -> None:
         raise ValueError(f"Expected CC BY-SA 4.0 license metadata in {path}")
 
 
+def _span_reference(title: str, book: int, start: int, end: int, has_books: bool) -> str:
+    sections = str(start) if end == start else f"{start}–{end}"
+    return f"{title} {book}.{sections}" if has_books else f"{title} {sections}"
+
+
+def _english_sections(work_id: str, root: ET.Element, has_books: bool) -> dict[int, list[dict]]:
+    """English Whiston sections per book, labelled with their starting Niese section."""
+    by_book: dict[int, list[dict]] = {}
+    chapter_by_book: dict[int, str] = {}
+    for book, section in _section_elements(root):
+        label = section.attrib["n"]
+        start = _ENGLISH_SECTION_CORRECTIONS.get((work_id, book, label), int(label))
+        whiston_section = None
+        for milestone in section.iter(f"{_TEI}milestone"):
+            if milestone.attrib.get("unit") == "Whiston_chapter":
+                chapter_by_book[book] = milestone.attrib["n"]
+            elif milestone.attrib.get("unit") == "Whiston_section" and whiston_section is None:
+                whiston_section = milestone.attrib["n"]
+        if whiston_section is None:
+            raise ValueError(f"{work_id} {book}.{label}: missing Whiston_section milestone")
+        whiston = [str(book)] if has_books else []
+        if book in chapter_by_book:
+            whiston.append(chapter_by_book[book])
+        whiston.append(whiston_section)
+        headings = [_source_text(head) for head in section.findall("tei:head", _NS)]
+        sections = by_book.setdefault(book, [])
+        if sections and start <= sections[-1]["start"]:
+            raise ValueError(
+                f"{work_id} book {book}: English section {label} does not follow "
+                f"section {sections[-1]['start']}"
+            )
+        sections.append({
+            "start": start,
+            "text": _source_text(section),
+            "alternate_reference": f"Whiston {'.'.join(whiston)}",
+            "editorial_heading": " ".join(h for h in headings if h) or None,
+        })
+    return by_book
+
+
+def _greek_sections(work_id: str, root: ET.Element) -> dict[int, list[tuple[int, str]]]:
+    """Niese Greek sections per book; the later 'arg' tables of contents are excluded."""
+    by_book: dict[int, list[tuple[int, str]]] = {}
+    for book, section in _section_elements(root):
+        label = section.attrib["n"]
+        if label == "arg":
+            continue
+        if not label.isdigit():
+            raise ValueError(f"{work_id} book {book}: unexpected Greek section label {label!r}")
+        by_book.setdefault(book, []).append((int(label), _source_text(section)))
+    for sections in by_book.values():
+        sections.sort()
+    return by_book
+
+
 def parse_josephus_work(directory: Path, work_id: str) -> list[dict]:
-    """Pair Whiston English and Niese Greek sections for one Josephus work."""
+    """Pair each Whiston English section with every Niese Greek section it spans.
+
+    The English TEI has one division per Whiston section, labelled with the Niese
+    section at which it starts; the Greek TEI has one division per Niese section.
+    An English section spans [its start, the next English start) within its
+    book; the last section of a book runs through the book's last Greek section.
+    """
     metadata = WORKS[work_id]
     english_path = directory / f"tlg0526.{work_id}.perseus-eng2.xml"
     greek_path = directory / f"tlg0526.{work_id}.perseus-grc2.xml"
@@ -129,38 +228,99 @@ def parse_josephus_work(directory: Path, work_id: str) -> list[dict]:
     _validate_license(english_root, english_path)
     _validate_license(greek_root, greek_path)
 
-    greek = {
-        (book, section.attrib["n"]): _source_text(section)
-        for book, section in _section_elements(greek_root)
-    }
+    has_books = metadata["key"] != "life"
+    english = _english_sections(work_id, english_root, has_books)
+    greek = _greek_sections(work_id, greek_root)
+    unpaired_books = set(greek) - set(english)
+    if unpaired_books:
+        raise ValueError(f"{work_id}: Greek books {sorted(unpaired_books)} have no English sections")
+
     rows: list[dict] = []
-    for book, section in _section_elements(english_root):
-        section_number = section.attrib["n"]
-        if metadata["key"] == "life":
-            reference = f"{metadata['reference_title']} {section_number}"
-        else:
-            reference = f"{metadata['reference_title']} {book}.{section_number}"
-        rows.append({
-            "corpus": "josephus",
-            "author": "Flavius Josephus",
-            "work_key": metadata["key"],
-            "work_title": metadata["title"],
-            "reference": reference,
-            "book_number": book,
-            "section_number": section_number,
-            "text": _source_text(section),
-            "original_text": greek.get((book, section_number)),
-            "period_tags": _period_tags(metadata["key"], book),
-            "edition": "Benedikt Niese, Flavii Iosephi Opera (1885–1895)",
-            "translation": "William Whiston, The Works of Flavius Josephus (1856)",
-            "license": LICENSE,
-            "source_url": f"{PERSEUS_BASE_URL}/{work_id}",
-        })
+    for book, sections in english.items():
+        greek_sections = greek.get(book, [])
+        if greek_sections and greek_sections[0][0] < sections[0]["start"]:
+            raise ValueError(
+                f"{work_id} book {book}: Greek section {greek_sections[0][0]} precedes "
+                f"the first English section {sections[0]['start']}"
+            )
+        last_greek = greek_sections[-1][0] if greek_sections else sections[-1]["start"]
+        for index, section in enumerate(sections):
+            start = section["start"]
+            if index + 1 < len(sections):
+                end = sections[index + 1]["start"] - 1
+            else:
+                end = max(start, last_greek)
+            greek_text = " ".join(
+                text for number, text in greek_sections if start <= number <= end and text
+            )
+            rows.append({
+                "corpus": "josephus",
+                "author": "Flavius Josephus",
+                "work_key": metadata["key"],
+                "work_title": metadata["title"],
+                "reference": _span_reference(metadata["reference_title"], book, start, end, has_books),
+                "alternate_reference": section["alternate_reference"],
+                "book_number": book,
+                "section_number": str(start),
+                "section_end": end,
+                "editorial_heading": section["editorial_heading"],
+                "text": section["text"],
+                "original_text": greek_text or None,
+                "period_tags": _period_tags(metadata["key"], book),
+                "edition": "Benedikt Niese, Flavii Iosephi Opera (1885–1895)",
+                "translation": "William Whiston, The Works of Flavius Josephus (1856)",
+                "license": LICENSE,
+                "source_url": f"{PERSEUS_BASE_URL}/{work_id}",
+            })
     return rows
+
+
+def _resolve_biblical_links(passages: list[tuple]) -> list[tuple]:
+    """Attach each curated link to the passage whose Niese span contains its section."""
+    spans: dict[tuple[str, int], list[tuple[int, int, int]]] = {}
+    for passage_id, work_key, book_number, section_start, section_end in passages:
+        spans.setdefault((work_key, book_number), []).append(
+            (int(section_start), int(section_end), passage_id)
+        )
+    link_rows = []
+    for work_key, book_number, section, biblical_book, c1, v1, c2, v2, note in _BIBLICAL_LINKS:
+        passage_id = next(
+            (
+                pid
+                for start, end, pid in spans.get((work_key, book_number), [])
+                if start <= section <= end
+            ),
+            None,
+        )
+        if passage_id is None:
+            raise ValueError(
+                f"Curated biblical link {work_key} {book_number}.{section} -> "
+                f"{biblical_book} {c1}:{v1} does not resolve to an imported passage"
+            )
+        link_rows.append((passage_id, biblical_book, c1 * 1000 + v1, c2 * 1000 + v2, note))
+    return link_rows
+
+
+JOSEPHUS_TEI_FILES = tuple(
+    f"tlg0526.{work_id}.perseus-{language}.xml"
+    for work_id in WORKS
+    for language in ("eng2", "grc2")
+)
+
+
+def require_josephus_files(directory: Path) -> None:
+    """Raise unless all eight pinned Josephus TEI files are present."""
+    missing = [name for name in JOSEPHUS_TEI_FILES if not (directory / name).is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"Josephus sources in {directory} are incomplete; missing "
+            f"{', '.join(missing)}. Run python scripts/download_ancient_sources.py."
+        )
 
 
 def import_josephus(conn: sqlite3.Connection, directory: Path) -> int:
     """Replace the Josephus corpus and rebuild its FTS and biblical links."""
+    require_josephus_files(directory)
     conn.execute("DELETE FROM ancient_source_biblical_links WHERE passage_id IN (SELECT id FROM ancient_source_passages WHERE corpus = 'josephus')")
     conn.execute("DELETE FROM ancient_source_passages_fts WHERE passage_id IN (SELECT id FROM ancient_source_passages WHERE corpus = 'josephus')")
     conn.execute("DELETE FROM ancient_source_passages WHERE corpus = 'josephus'")
@@ -168,34 +328,34 @@ def import_josephus(conn: sqlite3.Connection, directory: Path) -> int:
     rows = [row for work_id in WORKS for row in parse_josephus_work(directory, work_id)]
     conn.executemany(
         """INSERT INTO ancient_source_passages
-           (corpus, author, work_key, work_title, reference, book_number,
-            section_number, text, original_text, period_tags, edition,
-            translation, license, source_url)
+           (corpus, author, work_key, work_title, reference, alternate_reference,
+            book_number, section_number, section_end, editorial_heading, text,
+            original_text, period_tags, edition, translation, license, source_url)
            VALUES (:corpus, :author, :work_key, :work_title, :reference,
-                   :book_number, :section_number, :text, :original_text,
+                   :alternate_reference, :book_number, :section_number,
+                   :section_end, :editorial_heading, :text, :original_text,
                    :period_tags, :edition, :translation, :license, :source_url)""",
         rows,
     )
     passages = conn.execute(
-        "SELECT id, work_key, reference, work_title, text, original_text FROM ancient_source_passages WHERE corpus = 'josephus'"
+        """SELECT id, work_key, book_number, section_number, section_end,
+                  work_title, reference, text, original_text
+           FROM ancient_source_passages WHERE corpus = 'josephus'"""
     ).fetchall()
     conn.executemany(
         """INSERT INTO ancient_source_passages_fts
-           (passage_id, work_title, reference, text, original_text)
+           (passage_id, work_title, reference, text, original_text_folded)
            VALUES (?, ?, ?, ?, ?)""",
-        ((row[0], row[3], row[2], row[4], row[5] or "") for row in passages),
+        (
+            (row[0], row[5], row[6], row[7], fold_ancient_search_text(row[8] or ""))
+            for row in passages
+        ),
     )
-    passage_ids = {(row[1], row[2]): row[0] for row in passages}
-    link_rows = []
-    for work_key, reference, book, c1, v1, c2, v2, note in _BIBLICAL_LINKS:
-        passage_id = passage_ids.get((work_key, reference))
-        if passage_id is not None:
-            link_rows.append((passage_id, book, c1 * 1000 + v1, c2 * 1000 + v2, note))
     conn.executemany(
         """INSERT INTO ancient_source_biblical_links
            (passage_id, biblical_book, sort_start, sort_end, relationship_note)
            VALUES (?, ?, ?, ?, ?)""",
-        link_rows,
+        _resolve_biblical_links([row[:5] for row in passages]),
     )
     conn.commit()
     return len(rows)

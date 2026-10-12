@@ -8,6 +8,7 @@ import json
 import re
 import sqlite3
 import struct
+import unicodedata
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -211,6 +212,46 @@ def _lxx_row(row: dict) -> dict:
 
 def _group_key(row: dict) -> str:
     return row["canonical_reference"] or f"LXX-only {row['edition_reference']}"
+
+_BOOK_CODES = {code.lower(): code for code in BOOK_ABBREV_MAP.values()}
+_FTS_OPERATORS = {"AND", "OR", "NOT", "NEAR"}
+
+
+def fold_ancient_search_text(text: str) -> str:
+    """Fold accents and case for ancient-source search (NFC, NFD, drop marks, casefold).
+
+    Applied to the indexed Greek and to every query token, so polytonic accents,
+    breathings, iota subscripts, and final sigma do not affect matching.
+    """
+    decomposed = unicodedata.normalize("NFD", unicodedata.normalize("NFC", text))
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return unicodedata.normalize("NFC", stripped.casefold())
+
+
+def parse_ancient_biblical_reference(reference: str) -> tuple[str, int, int] | None:
+    """Parse 'Luke 21', 'Luke 21:5', or 'Luke 21:5-6' into (book code, sort start, sort end)."""
+    match = re.fullmatch(
+        r"\s*((?:[1-4]\s*)?[A-Za-z]+(?:\s+[A-Za-z]+)*)\.?\s+(\d+)(?::(\d+)(?:\s*[-–]\s*(\d+))?)?\s*",
+        reference,
+    )
+    if not match:
+        return None
+    book, chapter, verse, verse_end = match.groups()
+    key = re.sub(r"^([1-4])\s*", r"\1 ", re.sub(r"\s+", " ", book.strip().lower()))
+    code = (
+        BOOK_ABBREV_MAP.get(key)
+        or BOOK_ABBREV_MAP.get(key.replace(" ", ""))
+        or _BOOK_CODES.get(key.replace(" ", ""))
+    )
+    chapter_number = int(chapter)
+    if code is None or chapter_number < 1:
+        return None
+    if verse is None:
+        return code, chapter_number * 1000, chapter_number * 1000 + 999
+    start, end = int(verse), int(verse_end or verse)
+    if start < 1 or end < start or end > 999:
+        return None
+    return code, chapter_number * 1000 + start, chapter_number * 1000 + end
 
 
 def _sort_theme_lists(rows: list[dict]) -> list[dict]:
@@ -1641,49 +1682,103 @@ class StudyBibleDB:
         biblical_reference: str | None = None,
         period: str | None = None,
         limit: int = 10,
-    ) -> list[dict]:
-        """Full-text search licensed ancient sources with optional indexed filters."""
-        tokens = re.findall(r"\w+", query, re.UNICODE)
-        if not tokens:
-            return []
-        match_query = " AND ".join(f'"{token}"' for token in tokens)
-        where = ["ancient_source_passages_fts MATCH ?", "p.corpus = ?"]
-        params: list[Any] = [match_query, corpus]
+    ) -> dict:
+        """Full-text search licensed ancient sources with optional indexed filters.
 
+        Returns a dict with ``status`` (``ok``, ``invalid_query``,
+        ``invalid_reference``, ``corpus_missing``, ``no_link``, ``no_match``),
+        ``rows``, ``terms`` (the folded search terms), ``match`` (``all`` when
+        every term matched, ``any`` for the any-term fallback), and for
+        ``no_link`` the corpus-wide ``link_count`` and ``linked_passage_count``.
+        """
+        terms: list[str] = []
+        for token in re.findall(r"\w+", unicodedata.normalize("NFC", query)):
+            if token in _FTS_OPERATORS:
+                continue
+            for term in re.findall(r"\w+", fold_ancient_search_text(token)):
+                if term not in terms:
+                    terms.append(term)
+        result: dict[str, Any] = {"status": "ok", "rows": [], "terms": terms, "match": None}
+        if not terms:
+            result["status"] = "invalid_query"
+            return result
+
+        link_range = None
+        if biblical_reference:
+            link_range = parse_ancient_biblical_reference(biblical_reference)
+            if link_range is None:
+                result["status"] = "invalid_reference"
+                return result
+
+        try:
+            present = await self._fetchone(
+                "SELECT 1 FROM ancient_source_passages WHERE corpus = ? LIMIT 1",
+                (corpus,),
+            )
+        except sqlite3.OperationalError:
+            present = None
+        if present is None:
+            result["status"] = "corpus_missing"
+            return result
+
+        where = ["ancient_source_passages_fts MATCH ?", "p.corpus = ?"]
+        params: list[Any] = [corpus]
         if period:
             where.append("(',' || p.period_tags || ',') LIKE ?")
             params.append(f"%,{period},%")
-
-        if biblical_reference:
-            normalized = self._normalize_reference(biblical_reference)
-            match = re.match(r"^([^.]+)\.(\d+)\.(\d+)", normalized)
-            if not match:
-                return []
-            book, chapter, verse = match.groups()
-            where.append(
-                """EXISTS (
+        if link_range:
+            link_condition = """EXISTS (
                        SELECT 1 FROM ancient_source_biblical_links bl
                        WHERE bl.passage_id = p.id
                          AND bl.biblical_book = ?
-                         AND ? BETWEEN bl.sort_start AND bl.sort_end
+                         AND bl.sort_start <= ?
+                         AND bl.sort_end >= ?
                    )"""
+            linked = await self._fetchone(
+                f"""SELECT 1 FROM ancient_source_passages p
+                    WHERE p.corpus = ? AND {link_condition} LIMIT 1""",
+                (corpus, link_range[0], link_range[2], link_range[1]),
             )
-            params.extend((book, int(chapter) * 1000 + int(verse)))
+            if linked is None:
+                coverage = await self._fetchone(
+                    """SELECT COUNT(*) AS link_count,
+                              COUNT(DISTINCT bl.passage_id) AS linked_passage_count
+                       FROM ancient_source_biblical_links bl
+                       JOIN ancient_source_passages p ON p.id = bl.passage_id
+                       WHERE p.corpus = ?""",
+                    (corpus,),
+                )
+                result.update(status="no_link", **coverage)
+                return result
+            where.append(link_condition)
+            params.extend((link_range[0], link_range[2], link_range[1]))
 
-        params.append(limit)
-        rows = await self._fetchall(
-            f"""SELECT p.*, bm25(ancient_source_passages_fts) AS rank
-                FROM ancient_source_passages_fts
-                JOIN ancient_source_passages p
-                  ON p.id = ancient_source_passages_fts.passage_id
-                WHERE {' AND '.join(where)}
-                ORDER BY rank, p.work_title, p.book_number, p.section_number
-                LIMIT ?""",
-            params,
-        )
+        for match, operator in (("all", " AND "), ("any", " OR ")):
+            if match == "any" and len(terms) == 1:
+                break
+            match_query = operator.join(f'"{term}"' for term in terms)
+            rows = await self._fetchall(
+                f"""SELECT p.*, bm25(ancient_source_passages_fts) AS rank
+                    FROM ancient_source_passages_fts
+                    JOIN ancient_source_passages p
+                      ON p.id = ancient_source_passages_fts.passage_id
+                    WHERE {' AND '.join(where)}
+                    ORDER BY rank, p.work_title, p.book_number,
+                             CAST(p.section_number AS INTEGER)
+                    LIMIT ?""",
+                [match_query, *params, limit],
+            )
+            if rows:
+                result["match"] = match
+                break
         if not rows:
-            return []
+            result["status"] = "no_match"
+            return result
+        result["rows"] = await self._attach_ancient_biblical_links(rows)
+        return result
 
+    async def _attach_ancient_biblical_links(self, rows: list[dict]) -> list[dict]:
+        """Attach editorial biblical links to ancient-source passage rows."""
         passage_ids = [row["id"] for row in rows]
         placeholders = ",".join("?" for _ in passage_ids)
         links = await self._fetchall(
@@ -2265,8 +2360,11 @@ def create_schema(conn: sqlite3.Connection):
             work_key TEXT NOT NULL,
             work_title TEXT NOT NULL,
             reference TEXT NOT NULL,
+            alternate_reference TEXT,
             book_number INTEGER NOT NULL,
             section_number TEXT NOT NULL,
+            section_end INTEGER NOT NULL,
+            editorial_heading TEXT,
             text TEXT NOT NULL,
             original_text TEXT,
             period_tags TEXT NOT NULL,
@@ -2286,8 +2384,8 @@ def create_schema(conn: sqlite3.Connection):
             work_title,
             reference,
             text,
-            original_text,
-            tokenize = 'unicode61 remove_diacritics 2'
+            original_text_folded,
+            tokenize = 'porter unicode61 remove_diacritics 2'
         );
 
         CREATE TABLE IF NOT EXISTS ancient_source_biblical_links (

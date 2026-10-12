@@ -223,9 +223,11 @@ Septuagint table tells you to run `python scripts/upgrade_database.py`.
 #### `search_ancient_sources`
 
 Search licensed primary-source corpora for Jewish history. The initial
-`josephus` corpus contains 2,304 sections from *Jewish Antiquities*, *The
-Jewish War*, *Life*, and *Against Apion*. Results pair the Niese Greek edition
-with Whiston's English translation and identify the license and pinned source.
+`josephus` corpus contains 2,304 Whiston sections from *Jewish Antiquities*,
+*The Jewish War*, *Life*, and *Against Apion*. Each section is paired with
+every Niese Greek section it spans and referenced as a Niese span plus
+Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Results
+identify the edition, translation, license, and pinned source.
 
 ```text
 search_ancient_sources(
@@ -237,8 +239,16 @@ search_ancient_sources(
 )
 ```
 
-Period tags and biblical links are explicitly labelled editorial metadata;
-they are not presented as claims made by Josephus.
+English search is stemmed (`build` matches `building`); Greek search ignores
+accents, breathings, and case (`βαπτισμω` matches `βαπτισμῷ`). Passages
+containing every query word come first; when none do, passages matching any
+word are returned with an explicit note. `biblical_reference` accepts a
+chapter, verse, or verse range (`Luke 21`, `Luke 21:5`, `Luke 21:5-6`) and
+filters to 33 curated narrative-overlap links, each checked against the linked
+passage text. Period tags, biblical links, and Whiston's chapter headings are
+labelled editorial metadata; they are not presented as claims made by
+Josephus. Empty results say whether the corpus is missing, the reference is
+unsupported, the reference has no curated link, or nothing matched.
 
 #### 2. `word_study`
 
@@ -931,58 +941,26 @@ English or Greek book, or a manifest-listed file is missing or truncated).
 
 `search_ancient_sources` uses all four Josephus works from
 [PerseusDL canonical-greekLit](https://github.com/PerseusDL/canonical-greekLit),
-pinned to commit `01b725d835e6e733062ffd79e0efdbae1ba06e5c`. The importer pairs
-Benedikt Niese's Greek edition with William Whiston's English translation at
-section level, excludes editor notes from primary-source text, and builds an
-FTS5 index. Each TEI file declares CC BY-SA 4.0; downloads are checked against
-their pinned Git blob hashes.
+pinned to commit `01b725d835e6e733062ffd79e0efdbae1ba06e5c`. The English TEI
+has one division per Whiston section, labelled with the Niese section where it
+starts; the Greek TEI has one division per Niese section. The importer joins
+every Greek section from each English start up to the next (the last section
+of a book runs to the book's last Greek section), so no Niese Greek is dropped;
+the later Greek book summaries (`arg`) are excluded. One mislabelled English
+division (Whiston 17.13.1, labelled `13`) is corrected to Niese 17.339 from the
+Greek milestone and text. Editor notes and Whiston's chapter headings are kept
+out of the primary-source text and the search index; headings are stored as
+editorial metadata. The FTS5 index uses Porter stemming for English and an
+accent-folded copy of the Greek. Each TEI file declares CC BY-SA 4.0; downloads
+are checked against their pinned Git blob hashes, and the build fails if any of
+the eight TEI files is missing.
 
 Biblical links are a small, separate editorial index of direct narrative
-overlap. They do not assert literary dependence or historical agreement.
-
-### BDB Hebrew Lexicon
-
-The full unabridged Brown-Driver-Briggs Hebrew lexicon (8,090 entries) comes from [eliranwong/unabridged-BDB-Hebrew-lexicon](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon). The BDB is the standard scholarly Hebrew-English lexicon, originally published in 1906 and still widely used in academic study. Public domain text.
-
-### Abbott-Smith Greek Lexicon
-
-G. Abbott-Smith's *A Manual Greek Lexicon of the New Testament* (1922) provides NT-focused definitions that complement the broader classical coverage of LSJ. The TEI XML edition (5,896 entries) comes from [translatable-exegetical-tools/Abbott-Smith](https://github.com/translatable-exegetical-tools/Abbott-Smith). Public domain text.
-
-Abbott-Smith enriches 5,426 existing Greek entries with:
-
-| Field | Description | Coverage |
-|-------|-------------|----------|
-| **NT-focused definition** | Full definition with sense hierarchy | 5,871 entries |
-| **NT occurrence count** | Word frequency in the New Testament | 5,480 entries |
-| **LXX/Hebrew equivalents** | Hebrew words the Greek translates in the Septuagint | 3,317 entries |
-| **Synonym discussions** | Scholarly notes distinguishing related Greek words | 398 entries |
-
-### BibleAquifer
-
-Scholarly commentary and reference content from [BibleAquifer](https://github.com/BibleAquifer) (CC BY-SA 4.0):
-
-| Resource | Description | Content |
-|----------|-------------|---------|
-| **Aquifer Open Study Notes** | Verse-level scholarly commentary | 66 books |
-| **Tyndale Bible Dictionary** | Topical articles | 500+ articles on people, places, theology, history, archaeology |
-| **UW Translation Notes** | unfoldingWord translator commentary | Linguistic insights for 49+ books |
-| **SIL Translator Notes** | SIL International translator notes | Translation and cultural context |
-| **FIA Key Terms** | Key theological terms | 200+ carefully defined terms with cross-references |
-
-### ACAI Entity Annotations
-
-Rich entity annotations from [BibleAquifer/ACAI](https://github.com/BibleAquifer/ACAI) (CC BY-SA 4.0):
-
-| Type | Count | Content |
-|------|-------|---------|
-| People | ~2,500 | Family relationships, variant names, roles, speech attributions, verse references |
-| Places | ~400 | Geographic entities with biblical references |
-| Groups | ~200 | People groups, nations, tribes |
-| Key Terms | ~75 | Annotated theological concepts |
-
-### Theographic Bible Metadata
-
-Graph data for genealogy, events, and places from [Theographic](https://github.com/robertrouse/theographic-bible-metadata). Used by the `explore_genealogy`, `explore_person_events`, `explore_place`, `find_connection`, `people_in_passage`, and `graph_enriched_search` tools.
+overlap. Each targets a Niese section, attaches to the passage whose span
+contains it, and was checked against the passage text; the import fails if a
+link does not resolve. They do not assert literary dependence or historical
+agreement, and the Testimonium Flavianum link is marked as of disputed
+authenticity.
 
 ### Ancient Near East Context
 

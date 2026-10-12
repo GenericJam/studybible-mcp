@@ -212,16 +212,25 @@ omitted independently.""",
 early Roman Jewish history. The initial corpus is all four surviving works of
 Flavius Josephus in Whiston's English translation paired with Niese's Greek.
 
+Each result is one Whiston section with every Niese Greek section it spans,
+referenced as a Niese span ('Antiquities 15.317–322') plus Whiston's numbering
+('Whiston 15.9.3'). English search is stemmed (build/building); Greek search
+ignores accents, breathings, and case. Passages containing every query word
+are returned first; if none contain all of them, passages matching any word are
+returned and the output says so.
+
 Results are source passages, not modern historical judgments. Every result
 identifies the author, work, conventional reference, editorial period tags,
-edition, translation, license, and source URL. `biblical_reference` uses a
-small explicit editorial link set and is never inferred from keyword overlap.""",
+edition, translation, license, and source URL. Whiston's chapter headings are
+shown as editorial metadata, not as Josephus's text. `biblical_reference` uses a
+small curated set of editorial narrative-overlap links and is never inferred
+from keyword overlap.""",
         inputSchema={
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Words that must occur in the source passage (e.g. 'John Baptist' or 'Herod temple')",
+                    "description": "English or Greek words to search for (e.g. 'John Baptist', 'Herod temple', or 'βαπτισμῷ'). Search operators are ignored.",
                 },
                 "corpus": {
                     "type": "string",
@@ -231,7 +240,7 @@ small explicit editorial link set and is never inferred from keyword overlap."""
                 },
                 "biblical_reference": {
                     "type": "string",
-                    "description": "Optional verse used to filter explicit editorial passage links",
+                    "description": "Optional chapter, verse, or verse range (e.g. 'Luke 21', 'Luke 21:5', 'Luke 21:5-6') limiting results to passages with a curated editorial link overlapping it",
                 },
                 "period": {
                     "type": "string",
@@ -1332,6 +1341,7 @@ def format_ancient_source_results(
     corpus: str,
     biblical_reference: str | None = None,
     period: str | None = None,
+    match: str = "all",
 ) -> str:
     """Format primary-source results with provenance and editorial labels."""
     filters = [f"corpus={corpus}"]
@@ -1345,9 +1355,19 @@ def format_ancient_source_results(
         f"*Filters: {', '.join(filters)}*",
         "",
     ]
+    if match == "any":
+        lines.extend([
+            "*No passage contains all terms; showing passages matching any term.*",
+            "",
+        ])
     for row in rows:
-        lines.append(f"### {row['author']}, {row['reference']}")
+        heading = f"### {row['author']}, {row['reference']}"
+        if row.get("alternate_reference"):
+            heading += f" ({row['alternate_reference']})"
+        lines.append(heading)
         lines.append(f"- **Work:** {row['work_title']}")
+        if row.get("editorial_heading"):
+            lines.append(f"- **Whiston chapter heading (editorial):** {row['editorial_heading']}")
         lines.append(f"- **Editorial period tags:** {row['period_tags']}")
         lines.append(f"- **Greek edition:** {row['edition']}")
         lines.append(f"- **English translation:** {row['translation']}")
@@ -1359,7 +1379,7 @@ def format_ancient_source_results(
             lines.extend([
                 "",
                 "**Greek text excerpt:**",
-                _truncate(row["original_text"], 800, "\n\n*[Greek excerpt truncated]*"),
+                _truncate(row["original_text"], 2500, "\n\n*[Greek excerpt truncated]*"),
             ])
         if row.get("biblical_links"):
             lines.extend(["", "**Editorial biblical links:**"])
