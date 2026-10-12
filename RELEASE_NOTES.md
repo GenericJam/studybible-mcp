@@ -2,6 +2,21 @@
 
 ---
 
+## Provenance-aware Septuagint comparison
+
+- Added `compare_biblical_versions` with MT/LXX selection and independent
+  original-text and morphology controls.
+- Added all 59 books of the pinned Rahlfs morphology corpus plus the
+  public-domain Brenton translation.
+- Preserved version, edition, language, canonical reference, edition reference,
+  text, translation, license, and source URL on every imported row.
+- Added explicit MT/LXX verse mapping, including Hebrew/Greek Psalm numbering,
+  rather than calculating offsets.
+- Added checksum-verified source downloads and regression coverage for Psalm
+  numbering and provenance.
+
+---
+
 ## Theology Source Links
 
 - **Owen entries link to his text.** All 45 Owen entries now carry a

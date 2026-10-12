@@ -193,6 +193,12 @@ flowchart TD
     witnesses, and NT quotation links`"]
     TextualVariant --> Respond
 
+    Classify -->|"Compare MT and LXX editions"| VersionComparison
+    VersionComparison["`**compare_biblical_versions**
+    Returns: original texts, translations,
+    edition references, and provenance`"]
+    VersionComparison --> Respond
+
     %% === GRAMMAR PATH ===
     Classify -->|"Grammar question\n(e.g. 'What does V-AAI-3S mean?')"| GrammarPath
     GrammarPath --> ParseMorph
@@ -239,13 +245,14 @@ flowchart TD
     style TheologyContext fill:#3498db,stroke:#2178b5,color:#fff
     style TorahWeave fill:#7ed321,stroke:#5a9e18,color:#fff
     style TextualVariant fill:#7ed321,stroke:#5a9e18,color:#fff
+    style VersionComparison fill:#7ed321,stroke:#5a9e18,color:#fff
 ```
 
 ## Tool Colour Key
 
 | Colour | Category | Tools |
 |--------|----------|-------|
-| Green | Core text & language | lookup_verse, word_study, search_lexicon, search_by_strongs, get_cross_references, parse_morphology, lookup_name, get_torah_weave, get_textual_variant |
+| Green | Core text & language | lookup_verse, compare_biblical_versions, word_study, search_lexicon, search_by_strongs, get_cross_references, parse_morphology, lookup_name, get_torah_weave, get_textual_variant |
 | Purple | Hybrid search | find_similar_passages, graph_enriched_search |
 | Red | Graph knowledge | explore_genealogy, explore_person_events, explore_place, find_connection, people_in_passage |
 | Light blue | Scholarly commentary | get_study_notes, get_bible_dictionary, get_key_terms, get_theology_context |
@@ -298,8 +305,11 @@ User question → `get_ane_context` → `lookup_verse`
 User question → `lookup_verse` → `get_study_notes` →
 `get_ane_context` (for cultural illumination) → `word_study` → response
 
-**Textual comparison:**
-User question → `get_textual_variant` → `lookup_verse` → response
+**Edition comparison:**
+User question → `compare_biblical_versions` → `word_study` (when morphology needs explanation) → response
+
+**Textual-variant analysis:**
+User question → `get_textual_variant` → `compare_biblical_versions` → response
 
 **Torah structural study:**
 User question → `get_torah_weave` → `lookup_verse` → response

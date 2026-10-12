@@ -85,6 +85,22 @@ BOOK_ABBREV_MAP = {
     "3 john": "3Jn", "3jn": "3Jn",
     "jude": "Jud",
     "revelation": "Rev", "rev": "Rev",
+    "tobit": "Tob", "tob": "Tob",
+    "judith": "Jdt", "jdt": "Jdt",
+    "wisdom": "Wis", "wisdom of solomon": "Wis", "wis": "Wis",
+    "sirach": "Sir", "ecclesiasticus": "Sir", "sir": "Sir",
+    "baruch": "Bar", "bar": "Bar",
+    "1 maccabees": "1Ma", "1macc": "1Ma", "1 macc": "1Ma",
+    "2 maccabees": "2Ma", "2macc": "2Ma", "2 macc": "2Ma",
+    "3 maccabees": "3Ma", "3macc": "3Ma", "3 macc": "3Ma",
+    "4 maccabees": "4Ma", "4macc": "4Ma", "4 macc": "4Ma",
+    "1 esdras": "1Es", "1esd": "1Es", "1 esd": "1Es",
+    "prayer of manasseh": "Man", "manasseh": "Man",
+    "psalms of solomon": "Pss", "psalm of solomon": "Pss",
+    "greek esther": "EsG", "esther greek": "EsG",
+    "letter of jeremiah": "Lje", "epistle of jeremiah": "Lje",
+    "susanna": "Sus", "bel and the dragon": "Bel",
+    "odes": "Ode",
 }
 
 
@@ -251,15 +267,16 @@ class StudyBibleDB:
         
         # Parse reference like "John 3:16" or "1 Corinthians 13:4-7"
         match = re.match(
-            r'^(\d?\s*[a-zA-Z]+)\s*(\d+):(\d+)(?:-(\d+))?$',
-            reference.strip()
+            r'^(\d?\s*[a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(\d+):(\d+[a-z]?)(?:-(\d+[a-z]?))?$',
+            reference.strip(),
+            re.IGNORECASE,
         )
-        
+
         if match:
             book, chapter, verse_start, verse_end = match.groups()
             book_key = book.lower().strip()
             book_abbr = BOOK_ABBREV_MAP.get(book_key, book[:3].title())
-            return f"{book_abbr}.{chapter}.{verse_start}"
+            return f"{book_abbr}.{chapter}.{verse_start.lower()}"
         
         return reference
     
@@ -1344,6 +1361,74 @@ class StudyBibleDB:
         )
 
 
+    async def compare_biblical_versions(
+        self,
+        reference: str,
+        versions: list[str],
+    ) -> list[dict]:
+        """Return provenance-complete edition rows for a canonical reference or range."""
+        if not versions:
+            return []
+        human_range = re.match(
+            r'^(\d?\s*[a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(\d+):(\d+[a-z]?)-(\d+[a-z]?)$',
+            reference.strip(),
+            re.IGNORECASE,
+        )
+        normalized = self._normalize_reference(reference)
+        if human_range:
+            _, _, _, range_end = human_range.groups()
+            normalized = f"{normalized}-{range_end.lower()}"
+        match = re.match(
+            r"^([^.]+)\.(\d+)\.(\d+)([a-z]?)(?:-(\d+)([a-z]?))?$",
+            normalized,
+            re.IGNORECASE,
+        )
+        if not match:
+            return []
+
+        book, chapter, start_raw, start_suffix, end_raw, end_suffix = match.groups()
+        start = int(start_raw)
+        end = int(end_raw or start_raw)
+        if end < start:
+            return []
+
+        placeholders = ",".join("?" for _ in versions)
+        suffix_filter = ""
+        params: tuple = (book, int(chapter), start, end, *versions)
+        if start_suffix or end_suffix:
+            if end_raw:
+                return []
+            suffix_filter = " AND canonical_verse_suffix = ?"
+            params = (book, int(chapter), start, end, *versions, start_suffix.lower())
+
+        rows = await self._fetchall(
+            f"""SELECT version, edition, language, canonical_reference,
+                       canonical_chapter, canonical_verse, canonical_verse_suffix,
+                       edition_reference, text, translation, license,
+                       source_url, morphology, mapping_method
+                FROM biblical_version_verses
+                WHERE canonical_book = ?
+                  AND canonical_chapter = ?
+                  AND canonical_verse BETWEEN ? AND ?
+                  AND version IN ({placeholders}){suffix_filter}
+                ORDER BY canonical_verse, canonical_verse_suffix,
+                         edition_reference, edition""",
+            params,
+        )
+        version_order = {version: index for index, version in enumerate(versions)}
+        rows.sort(
+            key=lambda row: (
+                row["canonical_chapter"],
+                row["canonical_verse"],
+                row["canonical_verse_suffix"],
+                version_order.get(row["version"], len(version_order)),
+                row["edition"],
+                row["edition_reference"],
+            )
+        )
+        return rows
+
+
     async def get_textual_variants(self, reference: str) -> list[dict]:
         """Get textual variants for a reference, with manuscript witnesses."""
         normalized = self._normalize_reference(reference)
@@ -1861,6 +1946,33 @@ def create_schema(conn: sqlite3.Connection):
         CREATE VIEW IF NOT EXISTS heiser_verse_index AS SELECT * FROM theology_verse_index;
         CREATE VIEW IF NOT EXISTS heiser_themes AS SELECT * FROM theology_themes;
         CREATE VIEW IF NOT EXISTS heiser_theme_index AS SELECT * FROM theology_theme_index;
+
+        -- Provenance-complete MT/LXX edition texts. LXX edition_reference
+        -- preserves Greek versification while canonical_reference is the
+        -- corresponding MT/KJV reference from the explicit mapping dataset.
+        CREATE TABLE IF NOT EXISTS biblical_version_verses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version TEXT NOT NULL,
+            edition TEXT NOT NULL,
+            language TEXT NOT NULL,
+            canonical_reference TEXT NOT NULL,
+            canonical_book TEXT NOT NULL,
+            canonical_chapter INTEGER NOT NULL,
+            canonical_verse INTEGER NOT NULL,
+            canonical_verse_suffix TEXT NOT NULL DEFAULT '',
+            edition_reference TEXT NOT NULL,
+            text TEXT NOT NULL,
+            translation TEXT,
+            license TEXT NOT NULL,
+            source_url TEXT NOT NULL,
+            morphology TEXT,
+            mapping_method TEXT,
+            UNIQUE(version, edition, canonical_reference, edition_reference)
+        );
+        CREATE INDEX IF NOT EXISTS idx_bvv_canonical
+            ON biblical_version_verses(canonical_book, canonical_chapter, canonical_verse);
+        CREATE INDEX IF NOT EXISTS idx_bvv_version_ref
+            ON biblical_version_verses(version, canonical_reference);
 
         -- Textual variants (MT vs DSS/LXX/SP)
         CREATE TABLE IF NOT EXISTS textual_variants (

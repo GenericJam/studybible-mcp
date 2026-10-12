@@ -25,6 +25,7 @@ TOOL_CASES: dict[str, dict] = {
     "search_lexicon": {"query": "love", "language": "greek"},
     "get_cross_references": {"reference": "John 3:16"},
     "lookup_name": {"name": "David", "type": "person"},
+    "compare_biblical_versions": {"reference": "Psalm 24:1"},
     "parse_morphology": {"code": "V-AAI-3S", "language": "greek"},
     "search_by_strongs": {"strongs": "G26", "limit": 5},
     "find_similar_passages": {"reference": "John 3:16", "limit": 5},
@@ -48,6 +49,7 @@ _OPTIONAL_DATA_MESSAGES = (
     "not been generated",
     "no textual-variant or lxx-quotation data on file",
     "no torah weave unit contains",
+    "no biblical edition data found",
 )
 
 

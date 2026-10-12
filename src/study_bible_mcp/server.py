@@ -36,7 +36,7 @@ from .tools import (
     TOOLS, _truncate, format_lexicon_entry, format_verse, format_name_entry,
     format_genealogy, format_person_events, format_place_history,
     format_passage_entities, format_connection_path,
-    format_enriched_verse,
+    format_enriched_verse, format_biblical_version_comparison,
     mermaid_genealogy, mermaid_connection_path, mermaid_person_timeline,
     mermaid_place_network,
     format_study_notes, format_dictionary_article, format_key_terms,
@@ -244,6 +244,36 @@ async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
     result += xref_hint
 
     return text(result)
+
+
+async def handle_compare_biblical_versions(args: dict[str, Any]) -> list[TextContent]:
+    """Compare MT/LXX rows with explicit per-verse provenance."""
+    reference = args.get("reference", "").strip()
+    if not reference:
+        return text("Please provide a verse reference (e.g., 'Psalm 24:1').")
+
+    requested = args.get("versions", ["MT", "LXX"])
+    if not isinstance(requested, list) or not requested:
+        return text("'versions' must be a non-empty list containing MT and/or LXX.")
+    versions = list(dict.fromkeys(str(version).upper() for version in requested))
+    unsupported = [version for version in versions if version not in {"MT", "LXX"}]
+    if unsupported:
+        return text(f"Unsupported biblical version(s): {', '.join(unsupported)}. Use MT and/or LXX.")
+
+    rows = await db.compare_biblical_versions(reference, versions)
+    if not rows:
+        return text(
+            f"No biblical edition data found for {reference}. "
+            "Run scripts/download_biblical_versions.py and rebuild the database."
+        )
+    return text(
+        format_biblical_version_comparison(
+            reference,
+            rows,
+            include_original=args.get("include_original", True),
+            include_morphology=args.get("include_morphology", False),
+        )
+    )
 
 
 async def handle_search_lexicon(args: dict[str, Any]) -> list[TextContent]:
@@ -1121,6 +1151,7 @@ async def handle_get_textual_variant(args: dict[str, Any]) -> list[TextContent]:
 _TOOL_HANDLERS = {
     "word_study": handle_word_study,
     "lookup_verse": handle_lookup_verse,
+    "compare_biblical_versions": handle_compare_biblical_versions,
     "search_lexicon": handle_search_lexicon,
     "get_cross_references": handle_get_cross_references,
     "lookup_name": handle_lookup_name,

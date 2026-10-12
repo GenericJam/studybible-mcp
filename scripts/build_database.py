@@ -29,6 +29,7 @@ from study_bible_mcp.parsers.lexicon import (
 )
 from study_bible_mcp.parsers.tagged_text import parse_tagnt, parse_tahot, parse_morphology_codes
 from study_bible_mcp.parsers.proper_names import parse_tipnr
+from study_bible_mcp.parsers.biblical_versions import import_biblical_versions
 
 console = Console()
 
@@ -181,6 +182,18 @@ def build_database(data_dir: Path, db_path: Path, rebuild: bool = False):
         ane_dir = data_dir / "ane_context"
         if ane_dir.exists():
             import_ane_context(conn, ane_dir)
+
+        # Import provenance-aware MT/LXX edition texts when downloaded.
+        lxx_dir = data_dir / "lxx"
+        if (
+            (lxx_dir / "verse_pairs.jsonl").exists()
+            and (lxx_dir / "morphology").exists()
+            and (lxx_dir / "brenton").exists()
+        ):
+            mt_count, lxx_count = import_biblical_versions(conn, data_dir)
+            console.print(
+                f"  [green]✓[/green] Imported {mt_count} MT and {lxx_count} LXX edition rows"
+            )
 
         # Optimize
         console.print("\nOptimizing database...")

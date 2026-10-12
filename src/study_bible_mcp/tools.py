@@ -125,6 +125,51 @@ form, is needed.""",
         }
     ),
     Tool(
+        name="compare_biblical_versions",
+        annotations=ToolAnnotations(
+            title="Compare Biblical Versions",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+        ),
+        description="""Compare provenance-complete verse text across biblical editions.
+
+Defaults to the Masoretic Text (MT) and Septuagint (LXX). Each result preserves
+both the canonical MT/KJV reference and the source edition's own reference, so
+Psalm numbering and other Hebrew/Greek versification differences remain
+explicit rather than being guessed from a fixed offset.
+
+Returns the version, edition, language, canonical reference, edition reference,
+original text, English translation, license, and source URL for every row.
+Original-language text and word-level morphology can be omitted independently.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "reference": {
+                    "type": "string",
+                    "description": "Canonical reference or same-chapter range (e.g. 'Psalm 24:1' or 'Genesis 1:1-3')",
+                },
+                "versions": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": ["MT", "LXX"]},
+                    "default": ["MT", "LXX"],
+                    "description": "Editions to return, in display order. Default: MT and LXX",
+                },
+                "include_original": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include Hebrew/Greek text. Default: true",
+                },
+                "include_morphology": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Include word-level morphology. Default: false",
+                },
+            },
+            "required": ["reference"],
+        },
+    ),
+    Tool(
         name="search_lexicon",
         annotations=ToolAnnotations(title="Search Lexicon", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
         description="""Search the Greek and Hebrew lexicons by English word, transliteration, or concept.
@@ -1101,6 +1146,56 @@ def format_verse(verse: dict, include_original: bool = True, include_morphology:
         lines.append("")
     
     return "\n".join(lines)
+
+
+def format_biblical_version_comparison(
+    reference: str,
+    rows: list[dict],
+    include_original: bool = True,
+    include_morphology: bool = False,
+) -> str:
+    """Format edition rows while keeping every provenance field visible."""
+    lines = [f"## Biblical Version Comparison: {reference}", ""]
+    current_reference: str | None = None
+    for row in rows:
+        if row["canonical_reference"] != current_reference:
+            current_reference = row["canonical_reference"]
+            lines.extend([f"### {current_reference}", ""])
+
+        lines.append(f"#### {row['version']} — {row['edition']}")
+        lines.append(f"- **Version:** {row['version']}")
+        lines.append(f"- **Edition:** {row['edition']}")
+        lines.append(f"- **Language:** {row['language']}")
+        lines.append(f"- **Canonical reference:** {row['canonical_reference']}")
+        lines.append(f"- **Edition reference:** {row['edition_reference']}")
+        lines.append(f"- **License:** {row['license']}")
+        lines.append(f"- **Source:** {row['source_url']}")
+        if row.get("mapping_method") and row["canonical_reference"] != row["edition_reference"]:
+            lines.append(f"- **Versification mapping:** {row['mapping_method']}")
+        lines.append("")
+
+        if include_original:
+            lines.extend([f"**{row['language']} text:** {row['text']}", ""])
+        if row.get("translation"):
+            lines.extend([f"**English translation:** {row['translation']}", ""])
+        else:
+            lines.extend(["**English translation:** Not available for this edition row.", ""])
+
+        if include_morphology:
+            words = _parse_json_field(row.get("morphology"), [])
+            if words:
+                lines.append("**Morphology:**")
+                for word in words:
+                    surface = word.get("surface") or word.get("word") or ""
+                    identifier = word.get("lemma") or word.get("strongs") or ""
+                    parsing = word.get("parsing") or word.get("morph") or ""
+                    pos = word.get("pos") or ""
+                    details = "; ".join(part for part in (identifier, pos, parsing) if part)
+                    gloss = f" — {word['gloss']}" if word.get("gloss") else ""
+                    lines.append(f"- **{surface}**{f' ({details})' if details else ''}{gloss}")
+                lines.append("")
+
+    return "\n".join(lines).rstrip()
 
 
 def format_name_entry(entry: dict, acai_data: dict | None = None) -> str:
