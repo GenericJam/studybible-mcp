@@ -10,11 +10,13 @@ from pathlib import Path
 import httpx
 import pytest
 
-from study_bible_mcp import server
+from study_bible_mcp import database as database_module, server
 from study_bible_mcp.database import StudyBibleDB, create_schema, parse_passage_reference
 from study_bible_mcp.parsers.biblical_versions import (
     BRENTON_BOOK_CODES,
     BRENTON_TRANSLATION_NOTE,
+    KJV_APOCRYPHA_NOTE,
+    KJV_APOCRYPHA_TRANSLATION_LABEL,
     LXX_BOOK_CODES,
     LXX_SOURCE_BOOKS,
     REQUIRED_BRENTON_BOOKS,
@@ -576,13 +578,31 @@ async def test_rows_without_brenton_english_are_unchanged(tmp_path):
     assert theodotion["brenton_greek_differs"] == 0
 
 
-async def test_english_without_brenton_greek_says_it_was_not_compared(tmp_path):
+async def test_english_without_brenton_greek_says_it_was_not_compared(tmp_path, monkeypatch):
+    # Tobit is a KJV Apocrypha book; treat it as Brenton's own here to reach this path.
+    monkeypatch.setattr(database_module, "KJV_APOCRYPHA_BOOKS", frozenset())
     result = await _compare(_build_db(tmp_path), "Tobit 1:1")
     output = format_biblical_version_comparison("Tobit 1:1", result["rows"], numbering="lxx")
 
     assert result["rows"][0]["brenton_greek_differs"] is None
     assert "Brenton's Greek for this verse is unavailable, so it was not compared." in output
     assert "Warning" not in output
+
+
+async def test_kjv_apocrypha_english_is_labelled_and_warned(tmp_path):
+    result = await _compare(_build_db(tmp_path), "Tobit 1:1")
+    row = result["rows"][0]
+    output = format_biblical_version_comparison("Tobit 1:1", result["rows"], numbering="lxx")
+
+    assert row["kjv_apocrypha"] is True
+    assert "brenton_greek_differs" not in row and "brenton_greek" not in row
+    assert "**English (KJV Apocrypha):**" in output
+    assert "**Warning: the English below is the 1611 KJV Apocrypha" in output
+    assert f"English: {KJV_APOCRYPHA_TRANSLATION_LABEL}." in output  # Sources block
+    assert f"*KJV Apocrypha English: {KJV_APOCRYPHA_NOTE}*" in output
+    assert "Brenton's English:" not in output and "English (Brenton)" not in output
+    assert "Brenton's Greek (the text" not in output and "not compared" not in output
+    assert output.index("Warning") < output.index("**English (KJV")
 
 
 def test_import_adds_comparison_columns_to_an_existing_table(tmp_path):

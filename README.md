@@ -209,10 +209,20 @@ there with a note naming the verse to continue from.
   translates. Deuteronomy 32:43, for example, reports "word order differs (υἱοὶ
   ἄγγελοι)", and Psalm 40:6 reports "Brenton's Greek reads σῶμα for ὠτία".
   Differing verse divisions do not count as differences. About 38% of the
-  28,314 rows with Brenton's English are flagged. Unflagged rows (Sirach 17:17,
-  where the English adds words his Greek lacks) can still differ, because a
-  Greek-to-Greek comparison cannot see where his English departs from his own
-  Greek.
+  28,314 rows with Brenton's English are flagged. Unflagged rows can still
+  differ, because a Greek-to-Greek comparison cannot see where his English
+  departs from his own Greek.
+- **Eleven Apocrypha books carry the King James Version, not Brenton's
+  translation.** For 1 Esdras, 1–2 Maccabees, Baruch, Bel, Judith, the Letter of
+  Jeremiah, Sirach, Susanna, Tobit, and Wisdom, Brenton's edition prints the 1611
+  KJV Apocrypha (verse-by-verse similarity to the KJV is 92–100%, against 24–49%
+  for his own Hebrew-canon translations). The KJV was translated from other Greek
+  texts and partly from the Latin, so it can contain words neither the Rahlfs nor
+  Brenton's Greek has: Sirach 17:17 adds "in the division of the nations of the
+  whole earth". These rows show the English as "KJV Apocrypha" with a warning
+  that it is not a translation of the Greek shown, name the KJV in the Sources
+  block, and are not compared with Brenton's Greek. Greek Esther, the Prayer of Manasseh,
+  and 3–4 Maccabees are Brenton's own translation.
 - **LXX-only verses** (pluses such as the Prayer of Azariah, Psalm 151, and the
   Septuagint-only books) have no canonical MT position, so they never appear as
   the counterpart of a different MT verse. Request them with `numbering="lxx"`; a

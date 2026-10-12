@@ -95,8 +95,15 @@
   sequences still differ get a warning, a summary (word order, substitutions,
   additions, omissions), and Brenton's Greek labelled as the text his English
   translates: Deuteronomy 32:43 reports "word order differs (υἱοὶ ἄγγελοι)" and
-  Psalm 40:6 "Brenton's Greek reads σῶμα for ὠτία". Psalm 82:6 and Sirach 17:17
-  agree and show only the note.
+  Psalm 40:6 "Brenton's Greek reads σῶμα for ὠτία". Psalm 82:6 agrees and shows
+  only the note.
+- For eleven Apocrypha books (1 Esdras, 1–2 Maccabees, Baruch, Bel, Judith,
+  Letter of Jeremiah, Sirach, Susanna, Tobit, Wisdom) Brenton's edition prints
+  the 1611 King James Version, translated from other Greek texts and partly from
+  the Latin, rather than his own translation. Those rows are labelled as the KJV
+  Apocrypha and warn that the English is not a translation of the Greek shown
+  (Sirach 17:17 adds "in the division of the nations of the whole earth");
+  they are not compared with Brenton's Greek, which is not what they translate.
 - 10,756 of the 28,314 rows with Brenton's English (38%) are flagged. Brenton's
   Greek and the summary are stored only on flagged rows, which adds about 5 MB to
   the database. Existing comparison tables gain the new columns on re-import.

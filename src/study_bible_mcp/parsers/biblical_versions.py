@@ -34,6 +34,23 @@ BRENTON_TRANSLATION_NOTE = (
     "Vaticanus and is not the Rahlfs text shown, and his English sometimes departs even "
     "from that Greek, so his wording may not match the Greek beside it."
 )
+# For these books (Rahlfs edition-book codes) eBible's Brenton prints the 1611
+# King James Version Apocrypha, not Brenton's own translation: verse-by-verse
+# similarity to eBible's KJV is 0.92-1.00 (0.24-0.49 for the Hebrew-canon
+# books). The KJV was translated from other Greek texts and partly from the
+# Latin, so neither the Rahlfs nor Brenton's Greek is what it renders (Sirach
+# 17:17 adds "in the division of the nations of the whole earth"). Greek
+# Esther, the Prayer of Manasseh and 3-4 Maccabees are Brenton's own.
+KJV_APOCRYPHA_BOOKS = frozenset({
+    "1Es", "1Ma", "2Ma", "Bar", "Bel", "Jdt", "Lje", "Sir", "Sus", "Tob", "Wis",
+})
+KJV_APOCRYPHA_TRANSLATION_LABEL = "King James Version Apocrypha (1611), as printed in Brenton's edition"
+KJV_APOCRYPHA_NOTE = (
+    "For this book Brenton's edition prints the 1611 King James Version Apocrypha, "
+    "translated from other Greek texts and partly from the Latin, not from Brenton's "
+    "Greek or the Rahlfs text shown; it can add, omit or render words the Greek "
+    "beside it does not have (e.g. Sirach 17:17)."
+)
 
 MT_EDITION = "STEPBible TAHOT / Westminster Leningrad Codex"
 MT_LICENSE = "CC BY 4.0"
