@@ -2,6 +2,18 @@
 
 ---
 
+## Deterministic theology-context ordering
+
+- `get_theology_context` by reference now lists primary entries before
+  secondary/supporting ones. `relevance` is text, so the previous
+  `ORDER BY relevance DESC` put `supporting` ahead of `primary` (e.g.
+  "Deuteronomy 32:17 — Demons are Elohim" first for Psalm 82:6).
+- Ties are broken by verse and entry id, and theme lists are sorted, so the
+  hosted server and local databases return the same order.
+- Chapter-level fallbacks report each entry's best-ranked matching verse.
+
+---
+
 ## Full Scholarly Lexicons & BibleAquifer Integration
 
 ### New Data Sources

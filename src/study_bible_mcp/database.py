@@ -88,6 +88,19 @@ BOOK_ABBREV_MAP = {
 }
 
 
+def _sort_theme_lists(rows: list[dict]) -> list[dict]:
+    """Sort each row's comma-joined theme keys.
+
+    GROUP_CONCAT has no defined order, and ORDER BY inside an aggregate needs
+    SQLite 3.44+, so the list is ordered here to keep output stable.
+    """
+    for row in rows:
+        if row.get("themes"):
+            row["themes"] = ",".join(sorted(row["themes"].split(",")))
+    return rows
+
+
+
 class StudyBibleDB:
     """Async SQLite database interface for Bible study data."""
 
@@ -1237,8 +1250,18 @@ class StudyBibleDB:
             exact_params.append(author)
         exact_params.append(limit)
 
+        # Rank each entry by its best match: primary before secondary/supporting
+        # (the two non-primary labels are used by different authors' datasets),
+        # then by verse, then by id so ties are stable. relevance is TEXT, so
+        # sorting it directly would put 'supporting' ahead of 'primary'. With a
+        # single MIN() aggregate, SQLite takes matched_ref and relevance from
+        # the row that produced the minimum.
+        best_match = (
+            "MIN(CASE vi.relevance WHEN 'primary' THEN 0 ELSE 1 END * 1000"
+            " + COALESCE(vi.verse, 0)) AS match_rank"
+        )
         exact = await self._fetchall(
-            f"""SELECT DISTINCT tc.*, vi.reference AS matched_ref, vi.relevance,
+            f"""SELECT tc.*, vi.reference AS matched_ref, vi.relevance, {best_match},
                       GROUP_CONCAT(DISTINCT tt.theme_key) AS themes
                FROM theology_content tc
                JOIN theology_verse_index vi ON tc.id = vi.content_id
@@ -1246,20 +1269,20 @@ class StudyBibleDB:
                LEFT JOIN theology_themes tt ON tti.theme_key = tt.theme_key
                WHERE vi.reference = ?{author_filter}
                GROUP BY tc.id
-               ORDER BY vi.relevance DESC
+               ORDER BY match_rank, tc.id
                LIMIT ?""",
             exact_params,
         )
         if exact:
-            return exact
+            return _sort_theme_lists(exact)
 
         # Fall back to chapter-level
         where = f" AND {' AND '.join(conditions)}" if conditions else ""
         if author:
             where += " AND tc.source_author = ?"
             params.append(author)
-        return await self._fetchall(
-            f"""SELECT DISTINCT tc.*, vi.reference AS matched_ref, vi.relevance,
+        return _sort_theme_lists(await self._fetchall(
+            f"""SELECT tc.*, vi.reference AS matched_ref, vi.relevance, {best_match},
                        GROUP_CONCAT(DISTINCT tt.theme_key) AS themes
                 FROM theology_content tc
                 JOIN theology_verse_index vi ON tc.id = vi.content_id
@@ -1267,10 +1290,10 @@ class StudyBibleDB:
                 LEFT JOIN theology_themes tt ON tti.theme_key = tt.theme_key
                 WHERE 1=1{where}
                 GROUP BY tc.id
-                ORDER BY vi.relevance DESC
+                ORDER BY match_rank, tc.id
                 LIMIT ?""",
             (*params, limit),
-        )
+        ))
 
     async def get_theology_context_by_theme(
         self, theme_key: str, author: str | None = None, limit: int = 20
