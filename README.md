@@ -23,7 +23,7 @@ claude mcp add study-bible https://studybible-mcp.fly.dev/sse
 
 1. Open **Settings** → **Developer Mode** → enable it
 2. Go to **Actions** → **Add MCP Server**
-3. Enter URL: `https://studybible-mcp.fly.dev/mcp`
+3. Enter URL: `https://studybible-mcp.fly.dev/mcp/`
 
 ### Cursor / Windsurf / Cline
 

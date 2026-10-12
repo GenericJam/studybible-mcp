@@ -46,7 +46,7 @@ This guide covers running your own instance of the Study Bible MCP server.
    python -m study_bible_mcp.server --transport stdio
    ```
 
-   For network access (Streamable HTTP at `/mcp`, with legacy SSE at `/sse`):
+   For network access (Streamable HTTP at `/mcp/`, with legacy SSE at `/sse`):
    ```bash
    python -m study_bible_mcp.server --transport http --port 8080
    ```
@@ -95,7 +95,7 @@ curl http://localhost:8080/health
   "mcpServers": {
     "study-bible": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8080/mcp"]
+      "args": ["-y", "mcp-remote", "http://localhost:8080/mcp/"]
     }
   }
 }
@@ -167,7 +167,7 @@ curl http://localhost:8080/health
 
 Your server will be available at:
 ```
-https://your-studybible-mcp.fly.dev/mcp
+https://your-studybible-mcp.fly.dev/mcp/
 ```
 
 ---

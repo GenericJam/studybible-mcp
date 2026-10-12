@@ -37,7 +37,7 @@ Study Bible gives Claude access to read-only scholarly Bible study tools: full G
 
 ## Technical Details
 
-- **Transport**: Streamable HTTP (`/mcp`) + SSE (`/sse`) + stdio
+- **Transport**: Streamable HTTP (`/mcp/`) + SSE (`/sse`) + stdio
 - **Authentication**: None required (public, read-only)
 - **Rate limiting**: 100 requests/minute per IP
 - **Tools**: All tools are annotated with `readOnlyHint: true`
@@ -46,7 +46,7 @@ Study Bible gives Claude access to read-only scholarly Bible study tools: full G
 
 ## URLs
 
-- **Server endpoint**: `https://studybible-mcp.fly.dev/mcp`
+- **Server endpoint**: `https://studybible-mcp.fly.dev/mcp/`
 - **SSE endpoint**: `https://studybible-mcp.fly.dev/sse`
 - **GitHub**: `https://github.com/djayatillake/studybible-mcp`
 - **PyPI**: `https://pypi.org/project/studybible-mcp/`
