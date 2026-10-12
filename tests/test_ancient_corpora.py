@@ -3,6 +3,7 @@
 import hashlib
 import importlib.util
 import sqlite3
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -573,10 +574,12 @@ def test_fetch_github_directory_selects_and_verifies_blob_hashes(tmp_path):
     assert (tmp_path / "local-wanted.xml").read_bytes() == content
 
 
-def test_smoke_runner_covers_both_ancient_tools_for_every_corpus():
+def test_smoke_runner_covers_both_ancient_tools_for_every_corpus(monkeypatch):
     script = Path(__file__).resolve().parent.parent / "scripts" / "smoke_server.py"
     spec = importlib.util.spec_from_file_location("smoke_server", script)
     module = importlib.util.module_from_spec(spec)
+    # Registered like a normal import, so module-level dataclasses can resolve it.
+    monkeypatch.setitem(sys.modules, "smoke_server", module)
     spec.loader.exec_module(module)
 
     labels = {case[0] for case in module._cases()}
