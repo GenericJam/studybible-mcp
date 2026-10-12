@@ -28,7 +28,7 @@ from mcp.types import (
 
 import json
 
-from .database import BOOK_ABBREV_MAP, StudyBibleDB
+from .database import BOOK_ABBREV_MAP, INTERPRETIVE_CASE_KEYS, StudyBibleDB
 
 # Purple book with gold cross icon (32x32 PNG, base64 encoded)
 ICON_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42mNgGOmAEZtgQ9TV/7SwrGGZNiNeB9DKYnwOYcGl6MajG1S1VENOA6s4E4yxounvfw0NDZpYjm4mckgz0drnhMxmIdew5bO3M9w+twfOr5veS5Y5TAOdDUcdMOAOYCE2wWEDqkYueNVEpnpSxwHIqR3ZcmziqMBzNA1QJwqwFTLocT5aEI06YNQBow6gaUGEDUAqGk/qhwCu1iutWsY4+wW0bJYT1S+gZUgMqq7ZKAAA/oE/8EmGTpMAAAAASUVORK5CYII="
@@ -205,13 +205,20 @@ async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
                 f"Torah hypothesis.*"
             )
 
-    # Hint: a catalogued manuscript-variant case for this exact verse.
-    variant_case_keys = await db.get_textual_variant_case_keys(reference)
+    # Hint: a catalogued manuscript-variant or interpretive case for this verse.
+    case_keys = await db.get_textual_variant_case_keys(reference)
+    variant_case_keys = [k for k in case_keys if k not in INTERPRETIVE_CASE_KEYS]
     if variant_case_keys:
         result += (
             f"\n\n---\n*Textual variant catalogued for this verse "
             f"({', '.join(variant_case_keys)}): readings, witnesses, and "
             f"attributed analysis via `get_textual_variant` (reference='{reference}').*"
+        )
+    elif case_keys:
+        result += (
+            f"\n\n---\n*Translation and interpretation notes catalogued for this "
+            f"verse (no manuscript variant): translation decisions and attributed "
+            f"analysis via `get_textual_variant` (reference='{reference}').*"
         )
 
     # Hint: NT↔OT LXX-form quotation. Surfaces in both directions — looking up

@@ -6,6 +6,7 @@ import pytest
 
 import study_bible_mcp.server as server_module
 from scripts.import_heiser_content import (
+    import_nt_ot_lxx_quote_hints,
     import_textual_variant_record,
     import_textual_variants,
 )
@@ -139,14 +140,31 @@ async def test_import_keeps_variant_evidence_and_interpretation_separate(tmp_pat
     conn.close()
 
     cases = await _cases(db_path, "Deuteronomy 32:8")
-    interpretation_only = await _cases(db_path, "Genesis 6:2")
+    [interpretive] = await _cases(db_path, "Psalm 82:6")
 
-    assert imported == 2
+    assert imported == 26
     assert legacy_tables == []
-    assert interpretation_only == []
     assert len(cases) == 1
 
+    # Agreed-text records keep the MT as their only reading and their HLT
+    # decision and Heiser claim, with the record's prose as interpretation.
+    assert interpretive["kind"] == "interpretive"
+    assert [r["reading_key"] for r in interpretive["manuscript_evidence"]] == ["mt"]
+    assert {w["witness"] for w in interpretive["manuscript_evidence"][0]["witnesses"]} == {
+        "Masoretic Text",
+        "LXX (theoi este)",
+    }
+    assert interpretive["critical_judgments"] == []
+    assert interpretive["unsourced_summaries"] == []
+    assert "shining ones" in interpretive["translation_decisions"][0]["preferred_reading"]
+    assert interpretive["author_specific_claims"][0]["author"] == "Michael S. Heiser"
+    assert [i["attribution"] for i in interpretive["theological_interpretations"]] == [
+        "Dataset editorial note",
+        "Dataset summary of scholarly opinion",
+    ]
+
     case = cases[0]
+    assert case["kind"] == "manuscript"
     assert set(case) >= {
         "manuscript_evidence",
         "citation_evidence",
@@ -176,6 +194,51 @@ async def test_import_keeps_variant_evidence_and_interpretation_separate(tmp_pat
     assert case["translation_decisions"][0]["translation"] == (
         "Heiser Literal Translation (HLT)"
     )
+
+
+def test_bundled_quotation_hints_link_to_bundled_cases(tmp_path):
+    data_dir = Path(__file__).parents[1] / "data" / "heiser"
+    conn = sqlite3.connect(tmp_path / "variants.db")
+    create_schema(conn)
+    import_textual_variants(conn, data_dir / "variants")
+
+    first = import_nt_ot_lxx_quote_hints(conn, data_dir / "lxx_quote_hints.json")
+    second = import_nt_ot_lxx_quote_hints(conn, data_dir / "lxx_quote_hints.json")
+    links = dict(
+        conn.execute(
+            """SELECT h.nt_reference, c.reference || ' ' || c.case_key
+               FROM nt_ot_lxx_quote_hints h
+               JOIN textual_variant_cases c ON c.id = h.variant_case_id"""
+        ).fetchall()
+    )
+    total = conn.execute("SELECT COUNT(*) FROM nt_ot_lxx_quote_hints").fetchone()[0]
+    conn.close()
+
+    assert first == second == total == 18
+    assert links == {
+        "Heb.10.5": "Psa.40.6 LXX_quoted_in_NT",
+        "Heb.1.6": "Deu.32.43 DSS_4QDeutq",
+        "Act.15.17": "Amo.9.12 LXX_quoted_in_NT",
+        "Luk.4.18": "Isa.61.1 LXX_quoted_in_NT",
+        "Luk.3.6": "Isa.40.5 LXX_quoted_in_NT",
+        "Mat.21.16": "Psa.8.2 LXX_quoted_in_NT",
+    }
+
+
+def test_quotation_hint_linking_a_missing_case_fails(tmp_path):
+    hints_path = tmp_path / "hints.json"
+    hints_path.write_text(json.dumps({"hints": [{
+        "nt_reference": "Heb.10.5", "nt_display": "Hebrews 10:5", "nt_book": "Heb",
+        "ot_reference": "Psa.40.6", "ot_display": "Psalm 40:6", "ot_book": "Psa",
+        "follows_lxx": 1, "divergence_type": None, "divergence_note": None,
+        "variant_case": {"reference": "Psa.40.6", "case_key": "LXX_quoted_in_NT"},
+    }]}))
+    conn = sqlite3.connect(tmp_path / "variants.db")
+    create_schema(conn)
+
+    with pytest.raises(ValueError, match="links to missing case Psa.40.6"):
+        import_nt_ot_lxx_quote_hints(conn, hints_path)
+    conn.close()
 
 
 @pytest.mark.asyncio
@@ -234,7 +297,7 @@ def test_migration_rebuilds_legacy_schema_and_preserves_hint_links(tmp_path):
         "SELECT variant_case_id FROM nt_ot_lxx_quote_hints"
     ).fetchone()[0]
     assert linked_case_id == case_id
-    assert conn.execute("SELECT COUNT(*) FROM textual_variant_witnesses").fetchone()[0] == 7
+    assert conn.execute("SELECT COUNT(*) FROM textual_variant_witnesses").fetchone()[0] == 8
     conn.close()
 
 
@@ -476,6 +539,33 @@ async def test_lookup_verse_cues_catalogued_variant_case(tmp_path, server_db):
     assert "Textual variant catalogued for this verse (LXX_quoted_in_NT)" in psalm.text
 
 
+async def test_interpretive_case_is_shown_as_notes_not_a_variant(tmp_path, server_db):
+    db_path = tmp_path / "legacy.db"
+    _create_legacy_db(db_path)
+    conn = sqlite3.connect(db_path)
+    migrate(conn)
+    conn.execute(
+        "INSERT INTO verses VALUES (NULL, 'Gen.6.2', 'Gen', 6, 2, 'sons of God', 'בני האלהים', '[]', NULL)"
+    )
+    conn.commit()
+    conn.close()
+    await server_db(db_path)
+
+    [notes] = await server_module.handle_get_textual_variant({"reference": "Genesis 6:2"})
+    [verse] = await server_module.handle_lookup_verse({"reference": "Genesis 6:2"})
+
+    assert notes.text.startswith("# Translation and interpretation notes for Genesis 6:2")
+    assert "## Translation and interpretation notes at Gen.6.2" in notes.text
+    assert "Not a manuscript variant" in notes.text
+    assert "Gen.6.2 variant reading" in _section(notes.text, "### Theological interpretations")
+    assert "**Witnesses agreeing with this text:** Masoretic Text (~900 CE)" in notes.text
+    assert "## Variant at" not in notes.text
+    assert "dataset label" not in notes.text
+    assert "catalogued.*" not in notes.text  # empty sections are omitted
+    assert "Translation and interpretation notes catalogued for this verse" in verse.text
+    assert "Textual variant catalogued" not in verse.text
+
+
 @pytest.mark.asyncio
 async def test_lookup_verse_omits_variant_cue_on_legacy_db(tmp_path, server_db):
     db_path = tmp_path / "legacy.db"
@@ -535,7 +625,8 @@ def test_upgrade_is_repeatable_and_failure_leaves_original_untouched(
 
     assert first["migrated_variant_cases"] == 2
     assert second["migrated_variant_cases"] == 0
-    assert first["textual_variant_cases"] == second["textual_variant_cases"] == 3
+    assert first["migrated_interpretive_cases"] == 1
+    assert first["textual_variant_cases"] == second["textual_variant_cases"] == 4
     assert first_snapshot == second_snapshot
     assert not database.with_name(database.name + ".upgrade-tmp").exists()
 

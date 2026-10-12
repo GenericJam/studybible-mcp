@@ -35,7 +35,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 from study_bible_mcp.database import create_schema
 from study_bible_mcp.parsers.ancient_sources import import_josephus
 from study_bible_mcp.parsers.biblical_versions import import_biblical_versions
-from import_heiser_content import import_textual_variants
+from import_heiser_content import import_nt_ot_lxx_quote_hints, import_textual_variants
 from migrate_textual_variants import migrate
 
 
@@ -75,11 +75,15 @@ def upgrade(database: Path, data_dir: Path) -> dict[str, int]:
             raise click.ClickException(
                 f"{database} has no verses table; build it with build_database.py first."
             )
-        cases, excluded, hints = migrate(conn)
+        cases, interpretive, hints = migrate(conn)
         create_schema(conn)
         mt_rows, lxx_rows = import_biblical_versions(conn, data_dir)
         josephus = import_josephus(conn, data_dir / "ancient_sources" / "josephus")
         variants = import_textual_variants(conn, data_dir / "heiser" / "variants")
+        bundled_hints = 0
+        hints_path = data_dir / "heiser" / "lxx_quote_hints.json"
+        if hints_path.exists():
+            bundled_hints = import_nt_ot_lxx_quote_hints(conn, hints_path)
         conn.execute("ANALYZE")
         conn.commit()
 
@@ -103,12 +107,13 @@ def upgrade(database: Path, data_dir: Path) -> dict[str, int]:
 
     return {
         "migrated_variant_cases": cases,
-        "excluded_interpretation_records": excluded,
+        "migrated_interpretive_cases": interpretive,
         "quotation_hints": hints,
         "mt_rows": mt_rows,
         "lxx_rows": lxx_rows,
         "josephus_passages": josephus,
         "bundled_variant_cases": variants,
+        "bundled_quotation_hints": bundled_hints,
         "textual_variant_cases": variant_cases,
     }
 

@@ -19,11 +19,22 @@
   has not been verified against published text-critical scholarship.
 - Kept NT quotation alignment separate from both textual evidence and the HLT's
   translation decisions.
-- Excluded legacy `MT_preserved` and `translation_choice` records from
-  `get_textual_variant`; they describe interpretation, not manuscript
-  divergence.
-- Added a one-time migration that preserves genuine variant cases, witnesses,
-  and NT quotation links while removing the obsolete mixed tables.
+- Kept the legacy `MT_preserved` and `translation_choice` records (18 verses,
+  e.g. Psalm 82:6, Genesis 6:2, Daniel 7:13) as interpretive cases. The MT and
+  the versions agree at these verses, so they are shown under "Translation and
+  interpretation notes" with the MT as the only reading, never as variants.
+  Their HLT readings and rationales become translation decisions, Heiser's
+  analysis an author claim, and the record's prose attributed interpretation.
+- Omitted output sections with nothing catalogued instead of printing
+  "No ... catalogued" placeholders.
+- Added a one-time migration that preserves every legacy record, witness, and
+  NT quotation link while removing the obsolete mixed tables.
+- Exported the six variant cases that existed only in the database (Jeremiah
+  33:14, Psalm 40:6, Psalm 8:2, Isaiah 61:1, Isaiah 40:5, Amos 9:12) to
+  `data/heiser/variants/lxx_cases.json`, and the 18 NT quotation hints to
+  `data/heiser/lxx_quote_hints.json`, so a fresh build reproduces them. Added
+  the Deuteronomy 32:43 rationale's Hebrews 1:6 sentence to the bundled JSON,
+  so re-importing it no longer reverts the database text.
 - Made each variant record's replacement atomic: records are validated before
   any row is deleted and written inside a savepoint. A malformed record keeps
   its previously imported rows and fails the import with an error instead of
@@ -31,7 +42,8 @@
 - `get_textual_variant` now distinguishes a legacy or missing schema (run
   `python scripts/upgrade_database.py`), a reference that is not a single
   verse, and a verse with no catalogued case. `lookup_verse` now mentions
-  catalogued variant cases.
+  catalogued variant cases and, separately, translation and interpretation
+  notes.
 - Added `scripts/upgrade_database.py`, a repeatable in-place upgrade. It
   downloads the pinned sources, migrates, imports MT/LXX, Josephus, and the
   bundled variants, and checks integrity and foreign keys on a temporary copy

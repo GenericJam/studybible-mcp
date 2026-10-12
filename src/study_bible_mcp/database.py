@@ -266,6 +266,11 @@ def _sort_theme_lists(rows: list[dict]) -> list[dict]:
     return rows
 
 
+# Textual-variant case keys for verses where the MT and the ancient versions
+# agree. These records hold translation decisions and interpretive claims, not
+# manuscript divergence, so they are stored and shown as interpretive cases.
+INTERPRETIVE_CASE_KEYS = frozenset({"MT_preserved", "translation_choice"})
+
 
 class StudyBibleDB:
     """Async SQLite database interface for Bible study data."""
@@ -1845,6 +1850,9 @@ class StudyBibleDB:
         )
         for case in cases:
             case_id = case["id"]
+            case["kind"] = (
+                "interpretive" if case["case_key"] in INTERPRETIVE_CASE_KEYS else "manuscript"
+            )
             readings = await self._fetchall(
                 """SELECT * FROM textual_variant_readings
                    WHERE case_id = ? ORDER BY id""",

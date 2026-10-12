@@ -6,6 +6,9 @@
 #   temp name -> verify size + sha256 -> atomic mv over the live DB -> restart
 #
 # Run scripts/upgrade_database.py on the local file before uploading.
+# Run this from your own terminal: Claude Code's permission rules block the
+# sftp upload and remote writes. For small changes, prefer patching in place
+# (.claude/commands/deploy-db.md, Step 4a).
 #
 # Usage:
 #   scripts/upload-db.sh              # upload db/study_bible.db
@@ -46,7 +49,8 @@ needed_kb=$(( (local_size + gz_size) / 1024 + 51200 ))
 free_kb=$(remote "df -Pk /data | tail -1" | tr -d '\r' | awk '{print $4}')
 echo "  Volume free: $(( free_kb / 1024 )) MB, needed: $(( needed_kb / 1024 )) MB"
 if (( free_kb < needed_kb )); then
-    echo "Error: not enough space on /data. Extend the volume first:" >&2
+    echo "Error: not enough space on /data. Extending the volume is irreversible" >&2
+    echo "(volumes never shrink) and adds to the bill; if you accept that:" >&2
     echo "  fly volumes list -a $APP" >&2
     echo "  fly volumes extend <volume-id> --size <GB> -a $APP" >&2
     exit 1

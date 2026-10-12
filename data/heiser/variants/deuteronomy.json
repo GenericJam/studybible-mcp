@@ -34,7 +34,7 @@
       "heiser_analysis": "The MT is demonstrably incomplete when the literary structure is analyzed. Every colon in the Qumran and LXX texts has its partner (a bicolon), but the MT lacks the parallel colon referencing divine beings. The missing colon was deliberately eliminated to avoid reference to 'divine beings.' This parallel corruption with Deu.32.8 strongly argues both texts were intentionally altered for the same reason. The writer of Hebrews quotes Deu.32.43 (LXX/DSS reading) in Hebrews 1:6: 'Let all God's angels worship him.'",
       "scholarly_consensus": "The longer reading preserved in 4QDeutq and the LXX is original. The MT deliberately shortened the text to eliminate the reference to gods/divine beings bowing to Yahweh.",
       "preferred_for_hlt": "Rejoice, O heavens, with him, and bow down to him, all divine beings (sons of God). O nations, rejoice with his people, and let all the angels of God strengthen themselves in him.",
-      "hlt_rationale": "4QDeutq and LXX preserve the complete literary structure. The MT shortened it to suppress divine council language. The writer of Hebrews quotes this longer reading in Heb 1:6.",
+      "hlt_rationale": "4QDeutq and LXX preserve the complete literary structure. The MT shortened it to suppress divine council language. The writer of Hebrews quotes this longer reading in Heb 1:6. Hebrews 1:6 quotes this longer reading (\"let all the angels of God worship him\") and applies it to Christ — apostolic endorsement of the LXX/4QDeut^q text-form.",
       "witnesses": [
         {"manuscript": "4QDeutq", "manuscript_date": "~150-100 BCE", "reading_support": "supports_variant"},
         {"manuscript": "LXX", "manuscript_date": "~250 BCE", "reading_support": "supports_variant"},

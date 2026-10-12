@@ -563,8 +563,12 @@ preserved in** note. Every witness keeps the dataset's raw support label.
 Uncited dataset summaries appear separately as an **Unsourced dataset summary
 (not verified against published text-critical scholarship)**. Theological
 interpretations, named-author claims, translation decisions, and NT quotation
-alignment also stay in their own sections. `lookup_verse` mentions when a
-verse has a catalogued variant case. On a database that still has the legacy
+alignment also stay in their own sections, and sections with nothing
+catalogued are omitted. Verses where the witnesses agree with the MT but the
+reading or rendering is contested (for example the divine-council language of
+Psalm 82:6) appear as **Translation and interpretation notes**, never as
+variants. `lookup_verse` mentions when a verse has a catalogued variant case or
+interpretation notes. On a database that still has the legacy
 variant schema, the tool asks you to run `python scripts/upgrade_database.py`.
 
 ---

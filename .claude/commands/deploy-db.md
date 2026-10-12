@@ -10,6 +10,19 @@ This skill manages the study_bible.db database deployment lifecycle: download fr
 - The database is mounted via Fly.io persistent volume, NOT baked into the Docker image
 - The code (tools.py, server.py, parsers) is deployed separately via `fly deploy`
 
+## Running This From Claude Code
+
+- `fly` reports `No access token available` inside Claude Code even when
+  `~/.fly/config.yml` holds a valid token. Export it in the same command and run
+  with the sandbox disabled:
+  `export FLY_API_TOKEN=$(awk '/access_token:/{print $2}' ~/.fly/config.yml) && fly ...`
+  Never `cat` or `head` that file: it prints the token into the transcript.
+- Read-only steps (`fly status`, `fly deploy`, the health and endpoint checks)
+  work from Claude Code. Writes to the production volume do not: Claude Code's
+  permission rules block the sftp upload and `fly ssh console` commands that
+  change `/data`. Claude prepares those commands (or the patch script below);
+  the user runs them from their own terminal.
+
 ## Step 1: Download from Fly (if needed)
 
 If the local `db/study_bible.db` is stale or missing, download from the running Fly instance:
@@ -59,8 +72,37 @@ For a full database rebuild (all data, not just ANE):
 .venv/bin/python3 scripts/build_database.py
 ```
 
-## Step 4: Upload to Fly
+## Step 4a: Small Data Changes — Patch in Place (preferred)
 
+When only a few rows change (corrected URLs, deduplicated links, a data fix),
+apply the change to the live database directly instead of uploading 700MB. It
+cannot overwrite changes that exist only on the server, and it needs no extra
+volume space or restart (the server opens the file with an ordinary connection).
+
+1. Write a Python script that makes the change in one transaction, matching rows
+   by natural key rather than id, and rolls back and exits non-zero if any
+   update does not hit exactly the expected rows. Test it on a copy of the local
+   database rolled back to the production state, and run it twice to confirm
+   it is idempotent.
+2. Compress and base64-encode it (`fly ssh console` has no stdin, and the
+   image ships only `src/`, not `scripts/`):
+
+```bash
+python3 -c "import base64,zlib,sys;print(base64.b64encode(zlib.compress(open(sys.argv[1],'rb').read(),9)).decode())" patch.py > patch.b64
+```
+
+3. Run it on the server (from the user's terminal):
+
+```bash
+fly ssh console -a studybible-mcp -C "python -c \"import base64,zlib;exec(zlib.decompress(base64.b64decode('$(cat patch.b64)')))\""
+```
+
+4. Check the live endpoint (Step 5).
+
+## Step 4b: Upload the Whole Database
+
+Use this when the change is too large to patch, e.g. after
+`scripts/upgrade_database.py` adds new corpora. Run it from your own terminal.
 `scripts/upload-db.sh` automates this step. The manual sequence is below. The live
 database stays in place until the verified replacement is moved over it.
 
@@ -103,8 +145,11 @@ step 3; the live database is untouched.
 The upgraded database (~750MB) plus the live one (~680MB) and the compressed
 upload (~300MB) need about 1.75GB, so the default 1GB volume is too small for
 this upgrade. If `df` shows less free space than the
-compressed plus uncompressed sizes, extend the volume first (volumes can grow
-but not shrink; the machine may restart):
+compressed plus uncompressed sizes, the volume has to be extended first.
+
+**Get the user's explicit go-ahead before extending.** It cannot be undone
+(volumes grow but never shrink), it adds to the monthly bill, and the machine
+may restart. State the current and new size when asking.
 
 ```bash
 fly volumes list -a studybible-mcp
@@ -122,7 +167,18 @@ curl -s https://studybible-mcp.fly.dev/health | python3 -m json.tool
 
 # Exercise every tool against the local copy you uploaded
 .venv/bin/python3 scripts/smoke_server.py --db db/study_bible.db
+
+# Call a tool on the live server. The endpoint needs the trailing slash:
+# POST /mcp without it fails.
+curl -s -X POST https://studybible-mcp.fly.dev/mcp/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_textual_variant","arguments":{"reference":"Psalm 82:6"}}}' \
+  | sed -n 's/^data: //p' | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['content'][0]['text'][:1500])"
 ```
+
+Check something the change should have altered, not just that the server
+answers.
 
 ## Code Deployment (separate from DB)
 
@@ -136,7 +192,7 @@ This rebuilds the Docker image and deploys. The persistent volume with the DB is
 
 ## Important Notes
 
-- **Order when both code and data change**: upgrade and upload the database first, then `fly deploy` the code straight away. The previous code keeps serving every other tool from the upgraded database, but its `get_textual_variant` reads the dropped legacy table and returns an error until the new code is live. If the code goes out first instead, the new `get_textual_variant` tells callers to run `scripts/upgrade_database.py`, and the newly added tools have no data until the database is replaced.
+- **Order when both code and data change**: `fly deploy` the code first, then upload the database straight away. New code on the old database degrades politely: `get_textual_variant` reports that the database needs upgrading and the newly added tools report missing data. The reverse order is worse: the previous code's `get_textual_variant` reads the dropped legacy table and returns a raw SQL error until the new code is live.
 - **NEVER use raw sftp for the full uncompressed file**: it silently truncates and produces a corrupt DB. Always upload the gzip, then decompress on the server and compare the checksum.
 - **NEVER delete the live database before the replacement is verified**: upload under a temporary name and `mv` it over the old file.
 - The download endpoint (`/download/study_bible.db`) serves the file from the running instance.

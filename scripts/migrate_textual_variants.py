@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
-from study_bible_mcp.database import create_schema
+from study_bible_mcp.database import INTERPRETIVE_CASE_KEYS, create_schema
 from import_heiser_content import import_textual_variant_record
 
 
@@ -24,7 +24,10 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
 
 
 def migrate(conn: sqlite3.Connection) -> tuple[int, int, int]:
-    """Migrate legacy rows; return (cases, skipped_nonvariants, quotation_hints).
+    """Migrate legacy rows; return (variant_cases, interpretive_cases, quotation_hints).
+
+    Interpretive cases are the ``MT_preserved`` and ``translation_choice``
+    records, kept with their translation decisions and attributed claims.
 
     Runs in one transaction: any invalid legacy record (for example a witness
     whose ``reading_support`` label has no evidence-type mapping) raises and
@@ -53,7 +56,7 @@ def migrate(conn: sqlite3.Connection) -> tuple[int, int, int]:
     conn.execute("BEGIN IMMEDIATE")
     try:
         old_to_new: dict[int, int] = {}
-        skipped = 0
+        interpretive = 0
         for legacy in legacy_variants:
             variant = {
                 "reference": legacy["reference"],
@@ -69,11 +72,9 @@ def migrate(conn: sqlite3.Connection) -> tuple[int, int, int]:
                 "hlt_rationale": legacy["hlt_rationale"],
                 "witnesses": witnesses_by_variant.get(legacy["id"], []),
             }
-            case_id = import_textual_variant_record(conn, variant)
-            if case_id is None:
-                skipped += 1
-            else:
-                old_to_new[legacy["id"]] = case_id
+            old_to_new[legacy["id"]] = import_textual_variant_record(conn, variant)
+            if legacy["variant_source"] in INTERPRETIVE_CASE_KEYS:
+                interpretive += 1
 
         if _table_exists(conn, "nt_ot_lxx_quote_hints"):
             conn.execute("DROP TABLE nt_ot_lxx_quote_hints")
@@ -136,7 +137,7 @@ def migrate(conn: sqlite3.Connection) -> tuple[int, int, int]:
     finally:
         conn.execute("PRAGMA foreign_keys = ON")
 
-    return (len(old_to_new), skipped, len(legacy_hints))
+    return (len(old_to_new) - interpretive, interpretive, len(legacy_hints))
 
 
 def main() -> None:
@@ -150,10 +151,10 @@ def main() -> None:
     args = parser.parse_args()
 
     with sqlite3.connect(args.database) as conn:
-        cases, skipped, hints = migrate(conn)
+        cases, interpretive, hints = migrate(conn)
     print(
-        f"Migrated {cases} manuscript variant cases and {hints} quotation hints; "
-        f"excluded {skipped} interpretation-only legacy records."
+        f"Migrated {cases} manuscript variant cases, {interpretive} interpretive "
+        f"cases, and {hints} quotation hints."
     )
 
 
