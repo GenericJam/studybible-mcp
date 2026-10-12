@@ -776,6 +776,8 @@ Coverage by topic, with the author and theme keys that hold it:
 - Providence, God's sovereignty and human freedom, the problem of evil (Joseph, Daniel) — Lennox (themes: providence, divine_sovereignty_freedom)
 - Faithful witness in a hostile culture, Daniel — Lennox (theme: faithful_witness)
 
+Each entry includes a Source URL when the source is freely available online: Owen's public-domain text (CCEL chapter pages; Monergism volume PDFs for the Exposition of Hebrews), Heiser's papers and Naked Bible podcast transcripts, and Burnett's article series. Stott, Lennox, and Bradley entries have no URL.
+
 Query by verse reference, theme key, and/or author.""",
         inputSchema={
             "type": "object",
@@ -890,7 +892,7 @@ _THEOLOGY_PROVENANCE = (
     "*Provenance: these entries are original summaries of the named author's "
     "publicly available research and teaching, written for this database. They "
     "are not reproduced text from the authors' works. Owen (d. 1683) is in the "
-    "public domain and is cited by work.*"
+    "public domain and is cited by work, with a link to the free text.*"
 )
 
 

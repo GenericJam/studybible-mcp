@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Import Bradley theological scholarship content into the unified theology tables."""
+"""Import Bradley theological scholarship content into the unified theology tables.
+
+Re-runnable: rows already present (same source_work, chapter_or_episode, title) are
+not duplicated; only their url is refreshed from the data files.
+
+Usage: python scripts/import_bradley_content.py [db_path]
+"""
 
 from __future__ import annotations
 
@@ -10,10 +16,13 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from study_bible_mcp.database import link_theology_theme, upsert_theology_content
 from study_bible_mcp.parsers.heiser import parse_themes_file, parse_heiser_content_file
 
 
 def get_db_path() -> Path:
+    if len(sys.argv) > 1:
+        return Path(sys.argv[1])
     return Path(__file__).resolve().parent.parent / "db" / "study_bible.db"
 
 
@@ -53,6 +62,7 @@ def main():
     # 2. Import content files
     content_dir = data_dir / "content"
     total_entries = 0
+    total_urls = 0
     total_refs = 0
     total_themes = 0
     json_files = sorted(content_dir.glob("*.json"))
@@ -60,36 +70,17 @@ def main():
 
     for filepath in json_files:
         entries = 0
+        urls = 0
         refs = 0
         themes = 0
 
         for content_entry, verse_refs, theme_keys in parse_heiser_content_file(filepath):
             try:
-                cursor = conn.execute(
-                    """INSERT OR IGNORE INTO theology_content
-                       (source_work, source_author, source_type, chapter_or_episode,
-                        title, content_summary, content_detail, page_range, url)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (content_entry["source_work"], content_entry["source_author"],
-                     content_entry["source_type"], content_entry["chapter_or_episode"],
-                     content_entry["title"], content_entry["content_summary"],
-                     content_entry["content_detail"], content_entry["page_range"],
-                     content_entry["url"]),
-                )
-                if cursor.rowcount == 0:
-                    row = conn.execute(
-                        """SELECT id FROM theology_content
-                           WHERE source_work = ? AND chapter_or_episode IS ? AND title = ?""",
-                        (content_entry["source_work"], content_entry["chapter_or_episode"],
-                         content_entry["title"]),
-                    ).fetchone()
-                    content_id = row[0] if row else None
-                else:
-                    content_id = cursor.lastrowid
+                content_id, status = upsert_theology_content(conn, content_entry)
+                if status == "inserted":
                     entries += 1
-
-                if content_id is None:
-                    continue
+                elif status == "url_updated":
+                    urls += 1
 
                 for vref in verse_refs:
                     try:
@@ -106,12 +97,7 @@ def main():
 
                 for theme_key in theme_keys:
                     try:
-                        conn.execute(
-                            """INSERT OR IGNORE INTO theology_theme_index
-                               (theme_key, content_id, reference)
-                               VALUES (?, ?, NULL)""",
-                            (theme_key, content_id),
-                        )
+                        link_theology_theme(conn, theme_key, content_id)
                         themes += 1
                     except sqlite3.Error:
                         pass
@@ -121,11 +107,14 @@ def main():
 
         conn.commit()
         total_entries += entries
+        total_urls += urls
         total_refs += refs
         total_themes += themes
-        print(f"  {filepath.name}: {entries} entries, {refs} verse refs, {themes} theme links")
+        print(f"  {filepath.name}: {entries} entries, {urls} urls updated, "
+              f"{refs} verse refs, {themes} theme links")
 
-    print(f"\n[Totals] {total_entries} entries, {total_refs} verse refs, {total_themes} theme links")
+    print(f"\n[Totals] {total_entries} entries, {total_urls} urls updated, "
+          f"{total_refs} verse refs, {total_themes} theme links")
 
     # Summary
     print("\n" + "=" * 60)

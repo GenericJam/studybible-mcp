@@ -16,6 +16,11 @@ This rewrites them to descriptive labels and sets source_type accordingly:
 
 Idempotent: re-running after a successful pass is a no-op.
 
+The data files (source_key/type) and scripts/ingest_burnett_gage.py now carry these
+labels directly, so a fresh build needs no relabelling. This script upgrades a DB
+built from the old slugs; run it before re-running the importers on such a DB, since
+they match existing rows on (source_work, chapter_or_episode, title).
+
 Usage: python scripts/relabel_theology_sources.py [db_path]
 """
 

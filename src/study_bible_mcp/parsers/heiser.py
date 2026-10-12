@@ -84,7 +84,8 @@ def parse_heiser_content_file(filepath: str | Path) -> Generator[tuple[dict, lis
             "content_summary": entry["content_summary"],
             "content_detail": entry.get("content_detail"),
             "page_range": entry.get("page_range"),
-            "url": url,
+            # An entry-level url (e.g. a chapter page) overrides the file-level one.
+            "url": entry.get("url", url),
         }
 
         verse_refs = []

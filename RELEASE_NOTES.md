@@ -2,6 +2,34 @@
 
 ---
 
+## Theology Source Links
+
+- **Owen entries link to his text.** All 45 Owen entries now carry a
+  Source URL to the free public-domain text: the CCEL chapter or part
+  each entry draws on, or (for the Exposition of Hebrews, which CCEL
+  lacks) the Monergism PDF of the volume covering that chapter.
+- **Burnett** entries link to his own free serialisation of the
+  argument on drmsh.com; the JSPL article itself is not openly hosted.
+- **Heiser**: fixed two dead Naked Bible transcript links (episodes 94
+  and 334), pointed the Jude entries at the episode 434 transcript
+  instead of the podcast home page, and linked the nachash entry to the
+  episode 143 transcript.
+- Bradley, Stott, and Lennox stay unlinked: no free copy is hosted by
+  the author or publisher.
+- **Entry-level `url`** in content JSON overrides the file-level one.
+- **Re-runnable importers.** Re-importing into an existing DB refreshes
+  `url` on existing rows (matched on source_work, chapter_or_episode,
+  title) without duplicating rows or changing their content, and no
+  longer duplicates theme links on every run. The importers take an
+  optional DB path; `ingest_burnett_gage.py --theology-only` reloads
+  only the Burnett entries. See README → Theological Scholarship for
+  the upgrade commands.
+- Content JSON `source_key`/`type` now carry the descriptive labels
+  that `relabel_theology_sources.py` applied, so fresh builds and
+  relabelled DBs agree.
+
+---
+
 ## Full Scholarly Lexicons & BibleAquifer Integration
 
 ### New Data Sources
