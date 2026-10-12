@@ -899,9 +899,10 @@ python scripts/import_heiser_content.py $DB
 python scripts/import_bradley_content.py $DB
 python scripts/ingest_reformed_evangelical.py $DB    # Owen, Stott, Lennox
 python scripts/ingest_burnett_gage.py --theology-only $DB
+python scripts/dedupe_theology_theme_links.py $DB   # no-op once clean
 ```
 
-The relabel step must come first on a DB built before the descriptive labels: the data files now use those labels as `source_work`, so an unrelabelled DB would not match and would gain duplicate rows.
+The relabel step must come first on a DB built before the descriptive labels: the data files now use those labels as `source_work`, so an unrelabelled DB would not match and would gain duplicate rows. The dedupe step removes theme links that earlier importer runs duplicated (their NULL `reference` slipped past the UNIQUE constraint), which inflated theme entry counts.
 
 ### Ancient Near East Context
 
