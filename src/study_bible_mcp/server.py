@@ -373,7 +373,7 @@ async def handle_search_ancient_sources(args: dict[str, Any]) -> list[TextConten
     if period and period not in periods:
         return text(f"Unsupported period: {period}.")
     try:
-        limit = int(args.get("limit", 5))
+        limit = int(args.get("limit", 4))
     except (TypeError, ValueError):
         return text("'limit' must be an integer from 1 to 20.")
     if not 1 <= limit <= 20:

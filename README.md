@@ -229,8 +229,11 @@ Search licensed primary-source corpora for Jewish history. The initial
 `josephus` corpus contains 2,304 Whiston sections from *Jewish Antiquities*,
 *The Jewish War*, *Life*, and *Against Apion*. Each section is paired with
 every Niese Greek section it spans and referenced as a Niese span plus
-Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Results
-identify the edition, translation, license, and pinned source.
+Whiston's numbering, e.g. `Antiquities 15.317–322 (Whiston 15.9.3)`. Each
+result shows up to 1,500 characters of English around the first match and a
+shorter Greek excerpt (match-centred when the query is Greek); the edition,
+translation, license, and pinned source are listed once at the end. Up to 4
+passages are returned by default.
 
 ```text
 search_ancient_sources(
@@ -238,10 +241,12 @@ search_ancient_sources(
   corpus="josephus",
   biblical_reference="Mark 6:20",
   period="second_temple",
-  limit=5
+  limit=4
 )
 ```
 
+Only the passage text is searched, so a word that appears only in a work
+title (`Jewish`, `War`, `Life`) does not match every passage of that work.
 English search is stemmed (`build` matches `building`); Greek search ignores
 accents, breathings, and case (`βαπτισμω` matches `βαπτισμῷ`). Passages
 containing every query word come first; when none do, passages matching any
@@ -967,6 +972,50 @@ contains it, and was checked against the passage text; the import fails if a
 link does not resolve. They do not assert literary dependence or historical
 agreement, and the Testimonium Flavianum link is marked as of disputed
 authenticity.
+
+### BDB Hebrew Lexicon
+
+The full unabridged Brown-Driver-Briggs Hebrew lexicon (8,090 entries) comes from [eliranwong/unabridged-BDB-Hebrew-lexicon](https://github.com/eliranwong/unabridged-BDB-Hebrew-lexicon). The BDB is the standard scholarly Hebrew-English lexicon, originally published in 1906 and still widely used in academic study. Public domain text.
+
+### Abbott-Smith Greek Lexicon
+
+G. Abbott-Smith's *A Manual Greek Lexicon of the New Testament* (1922) provides NT-focused definitions that complement the broader classical coverage of LSJ. The TEI XML edition (5,896 entries) comes from [translatable-exegetical-tools/Abbott-Smith](https://github.com/translatable-exegetical-tools/Abbott-Smith). Public domain text.
+
+Abbott-Smith enriches 5,426 existing Greek entries with:
+
+| Field | Description | Coverage |
+|-------|-------------|----------|
+| **NT-focused definition** | Full definition with sense hierarchy | 5,871 entries |
+| **NT occurrence count** | Word frequency in the New Testament | 5,480 entries |
+| **LXX/Hebrew equivalents** | Hebrew words the Greek translates in the Septuagint | 3,317 entries |
+| **Synonym discussions** | Scholarly notes distinguishing related Greek words | 398 entries |
+
+### BibleAquifer
+
+Scholarly commentary and reference content from [BibleAquifer](https://github.com/BibleAquifer) (CC BY-SA 4.0):
+
+| Resource | Description | Content |
+|----------|-------------|---------|
+| **Aquifer Open Study Notes** | Verse-level scholarly commentary | 66 books |
+| **Tyndale Bible Dictionary** | Topical articles | 500+ articles on people, places, theology, history, archaeology |
+| **UW Translation Notes** | unfoldingWord translator commentary | Linguistic insights for 49+ books |
+| **SIL Translator Notes** | SIL International translator notes | Translation and cultural context |
+| **FIA Key Terms** | Key theological terms | 200+ carefully defined terms with cross-references |
+
+### ACAI Entity Annotations
+
+Rich entity annotations from [BibleAquifer/ACAI](https://github.com/BibleAquifer/ACAI) (CC BY-SA 4.0):
+
+| Type | Count | Content |
+|------|-------|---------|
+| People | ~2,500 | Family relationships, variant names, roles, speech attributions, verse references |
+| Places | ~400 | Geographic entities with biblical references |
+| Groups | ~200 | People groups, nations, tribes |
+| Key Terms | ~75 | Annotated theological concepts |
+
+### Theographic Bible Metadata
+
+Graph data for genealogy, events, and places from [Theographic](https://github.com/robertrouse/theographic-bible-metadata). Used by the `explore_genealogy`, `explore_person_events`, `explore_place`, `find_connection`, `people_in_passage`, and `graph_enriched_search` tools.
 
 ### Ancient Near East Context
 

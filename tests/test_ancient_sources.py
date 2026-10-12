@@ -222,6 +222,17 @@ async def test_search_stems_english_and_combines_filters(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_search_ignores_work_titles_and_references(tmp_path, monkeypatch):
+    db_path = _build_db(tmp_path, monkeypatch)
+
+    # Each word appears only in a work title ("Jewish Antiquities", "Against
+    # Apion", "Life of Josephus"), never in passage text.
+    for query in ("Jewish", "Apion", "Josephus"):
+        result = await _search(db_path, query)
+        assert result["status"] == "no_match", query
+
+
+@pytest.mark.asyncio
 async def test_search_folds_greek_accents_case_and_spanned_sections(tmp_path, monkeypatch):
     db_path = _build_db(tmp_path, monkeypatch)
 
@@ -297,12 +308,45 @@ def test_ancient_source_formatter_labels_primary_text_and_provenance():
     output = format_ancient_source_results("John Baptist", [row], "josephus")
 
     assert "### Flavius Josephus, Antiquities 18.116–119 (Whiston 18.5.2)" in output
-    assert "**Whiston chapter heading (editorial):** HOW HEROD" in output
-    assert "**Greek edition:** Benedikt Niese" in output
-    assert "**English translation:** William Whiston" in output
-    assert "**License:** CC BY-SA 4.0" in output
-    assert "**Greek text excerpt:**" in output
+    assert "*Jewish Antiquities · editorial period tags: second_temple,herodian,roman*" in output
+    assert "*Whiston chapter heading (editorial): HOW HEROD" in output
+    assert "**Greek:** Ἰωάννου τοῦ βαπτιστοῦ" in output
+    assert output.endswith(
+        "**Sources**\n- Greek: Benedikt Niese. English: William Whiston. "
+        "License: CC BY-SA 4.0. https://example.test/josephus"
+    )
     assert "No passage contains all terms" not in output
+
+
+def test_ancient_source_provenance_is_listed_once_per_response():
+    row = {
+        "author": "Flavius Josephus", "reference": "War 1.1", "alternate_reference": None,
+        "editorial_heading": None, "work_title": "The Jewish War", "period_tags": "roman",
+        "edition": "Niese", "translation": "Whiston", "license": "CC BY-SA 4.0",
+        "source_url": "https://example.test/war", "text": "x", "original_text": None,
+        "biblical_links": [],
+    }
+    other = dict(row, reference="Antiquities 1.1", source_url="https://example.test/ant")
+
+    output = format_ancient_source_results("x", [row, dict(row, reference="War 1.2"), other], "josephus")
+
+    assert output.count("CC BY-SA 4.0") == 1
+    assert output.count("https://example.test/war") == 1
+    assert "https://example.test/war https://example.test/ant" in output
+
+
+def test_excerpt_is_centred_on_the_first_match():
+    from study_bible_mcp.tools import _match_excerpt
+
+    text = "Opening words of the passage. " * 100 + "Herod rebuilt the temple. " + "Tail. " * 100
+    excerpt = _match_excerpt(text, "temple building", 600)
+    greek = _match_excerpt("ἀρχή " * 300 + "τοῦ βαπτιστοῦ" + " τέλος" * 300, "βαπτιστου", 400)
+
+    assert "Herod rebuilt the temple." in excerpt
+    assert excerpt.startswith("…") and excerpt.endswith("…")
+    assert len(excerpt) <= 602
+    assert "βαπτιστοῦ" in greek
+    assert _match_excerpt("short text", "missing", 600) == "short text"
 
 
 def test_download_default_data_dir_is_project_relative():
