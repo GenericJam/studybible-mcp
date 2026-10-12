@@ -184,6 +184,21 @@ class TestLinkChecker:
         assert "ConnectError" in results["https://dns"].error
         assert results["https://gone"].origins == ["origin of https://gone"]
 
+    async def test_timeout_is_retried_and_persistent_timeouts_are_labelled(self, smoke):
+        async def fetch(url):
+            raise httpx.ReadTimeout("slow")
+
+        async def retry(url):
+            if url == "https://slow":
+                return 200
+            raise httpx.ReadTimeout("still slow")
+
+        targets = {"https://slow": ["a"], "https://dead": ["b"]}
+        results = {r.url: r for r in await smoke.check_links(targets, fetch, retry=retry)}
+
+        assert not results["https://slow"].broken
+        assert results["https://dead"].broken and results["https://dead"].timed_out
+
     async def test_get_fallback_when_head_refused(self, smoke):
         def handler(request):
             if request.url.path == "/no-head":

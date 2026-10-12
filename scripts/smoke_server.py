@@ -11,9 +11,11 @@ With --check-links it instead checks external links over the network: every
 research-source URL, every research-source search template filled with a sample
 query, and every distinct theology_content.url in the database. A link is broken
 when it answers with status >= 400 or a network error. HEAD is tried first and
-GET is used when HEAD fails, because some sites reject HEAD. A catalogue entry
-marked "link_check": "skip" (with a "link_check_reason") is reported as skipped;
-use it only for sites that block automated clients.
+GET is used when HEAD fails, because some sites reject HEAD. A timeout is
+retried once with a longer limit (slow hosts are not dead ones); a link that
+still times out is reported as TIMEOUT and fails the run like a broken link. A
+catalogue entry marked "link_check": "skip" (with a "link_check_reason") is
+reported as skipped; use it only for sites that block automated clients.
 """
 
 from __future__ import annotations
@@ -155,6 +157,9 @@ async def run(db_path: Path) -> bool:
 LINK_CHECK_SAMPLE_QUERY = "Psalm 82"
 LINK_CHECK_CONCURRENCY = 8
 LINK_CHECK_TIMEOUT = 20.0
+# Some hosts (e.g. drmsh.com) answer in 20-30 s; a timed-out link is retried
+# once with this longer limit before it is reported.
+LINK_CHECK_RETRY_TIMEOUT = 60.0
 _USER_AGENT = "Mozilla/5.0 (compatible; studybible-mcp link checker; +https://github.com/djayatillake/studybible-mcp)"
 
 # Returns the final HTTP status for a URL; raises httpx.HTTPError on network failure.
@@ -167,9 +172,11 @@ class LinkResult:
     origins: list[str]
     status: int | None
     error: str | None
+    timed_out: bool = False
 
     @property
     def broken(self) -> bool:
+        """Any failure, including a timeout that persisted through the retry."""
         return self.error is not None or self.status is None or self.status >= 400
 
 
@@ -215,17 +222,37 @@ def make_http_fetcher(client: httpx.AsyncClient) -> Fetcher:
 
 
 async def check_links(
-    targets: dict[str, list[str]], fetch: Fetcher, concurrency: int = LINK_CHECK_CONCURRENCY
+    targets: dict[str, list[str]],
+    fetch: Fetcher,
+    concurrency: int = LINK_CHECK_CONCURRENCY,
+    retry: Fetcher | None = None,
 ) -> list[LinkResult]:
-    """Fetch every target with bounded concurrency; network errors become broken results."""
+    """Fetch every target with bounded concurrency; network errors become broken results.
+
+    A timeout is retried once with ``retry`` (a slower fetcher), so a slow host
+    is not reported as broken; a timeout that persists is marked ``timed_out``.
+    """
     semaphore = asyncio.Semaphore(concurrency)
+
+    def failed(url: str, origins: list[str], exc: Exception) -> LinkResult:
+        return LinkResult(
+            url, origins, None, f"{type(exc).__name__}: {exc}".strip(": "),
+            timed_out=isinstance(exc, httpx.TimeoutException),
+        )
 
     async def check(url: str, origins: list[str]) -> LinkResult:
         async with semaphore:
             try:
                 return LinkResult(url, origins, await fetch(url), None)
+            except httpx.TimeoutException as exc:
+                if retry is None:
+                    return failed(url, origins, exc)
             except (httpx.HTTPError, httpx.InvalidURL) as exc:
-                return LinkResult(url, origins, None, f"{type(exc).__name__}: {exc}".strip(": "))
+                return failed(url, origins, exc)
+            try:
+                return LinkResult(url, origins, await retry(url), None)
+            except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                return failed(url, origins, exc)
 
     return list(await asyncio.gather(*(check(url, origins) for url, origins in targets.items())))
 
@@ -236,25 +263,28 @@ async def run_link_check(db_path: Path) -> bool:
         return False
     targets, skipped = collect_link_targets(db_path)
     logging.getLogger("httpx").setLevel(logging.WARNING)  # the report below lists every URL
-    async with httpx.AsyncClient(
-        follow_redirects=True,
-        timeout=LINK_CHECK_TIMEOUT,
-        headers={"User-Agent": _USER_AGENT},
-    ) as client:
-        results = await check_links(targets, make_http_fetcher(client))
+    client_options = {"follow_redirects": True, "headers": {"User-Agent": _USER_AGENT}}
+    async with httpx.AsyncClient(timeout=LINK_CHECK_TIMEOUT, **client_options) as client, \
+            httpx.AsyncClient(timeout=LINK_CHECK_RETRY_TIMEOUT, **client_options) as slow_client:
+        results = await check_links(
+            targets, make_http_fetcher(client), retry=make_http_fetcher(slow_client)
+        )
 
     broken = [r for r in results if r.broken]
+    timed_out = [r for r in broken if r.timed_out]
     for result in sorted(results, key=lambda r: r.url):
-        label = "BROKEN" if result.broken else "OK    "
+        label = "TIMEOUT" if result.timed_out else "BROKEN " if result.broken else "OK     "
         outcome = result.error or result.status
         print(f"{label} {outcome} {result.url}")
         if result.broken:
             for origin in result.origins:
-                print(f"         from {origin}")
+                print(f"          from {origin}")
     for note in skipped:
-        print(f"SKIP   {note}")
+        print(f"SKIP    {note}")
     print(f"\n{len(results)} links checked: {len(results) - len(broken)} ok, "
-          f"{len(broken)} broken, {len(skipped)} catalogue entries skipped")
+          f"{len(broken) - len(timed_out)} broken, {len(timed_out)} timed out "
+          f"(no response within {LINK_CHECK_RETRY_TIMEOUT:.0f} s on retry), "
+          f"{len(skipped)} catalogue entries skipped")
     return not broken
 
 
