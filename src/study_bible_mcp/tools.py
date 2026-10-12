@@ -225,10 +225,13 @@ temple, John the Baptist, or the Jewish revolt, in Josephus and other corpora.
 Registered corpora (`corpus`; `all` searches every imported corpus):
 {_ANCIENT_CORPORA}
 
-English search is stemmed (build/building); Greek, Hebrew, and Aramaic search
-ignores accents, breathings, vowel points, cantillation, and case. Passages
-containing every query word are returned first; if none contain all of them,
-passages matching any word are returned and the output says so.
+English search is stemmed (build/building) and matches only the translation's
+own wording (a translator may render one original term several ways). Search Greek,
+Hebrew, and Aramaic terms in their own script: accents, breathings, vowel
+points, cantillation, and case are ignored (λογος matches λόγος), but
+transliterations such as "logos" or "memra" do not match. Passages containing
+every query word are returned first; if none contain all of them, passages
+matching any word are returned and the output says so.
 
 Only the passage text is searched, not work titles or references. Results are
 source passages, not modern historical judgments. Each result gives the corpus,
@@ -243,7 +246,7 @@ overlap. To read a passage by its citation, use lookup_ancient_source.""",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "English or original-language words to search for (e.g. 'John Baptist', 'Herod temple', or 'βαπτισμῷ'). Search operators are ignored.",
+                    "description": "English or original-language words to search for (e.g. 'John Baptist', 'Herod temple', or 'βαπτισμῷ'). Write Greek, Hebrew, and Aramaic in their own script (accents optional); transliterations do not match. Search operators are ignored.",
                 },
                 "corpus": {
                     "type": "string",
