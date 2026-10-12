@@ -2,6 +2,37 @@
 
 ---
 
+## Research Sources Catalogue & Link Checker
+
+### New Tool
+
+**`list_research_sources`** lists 37 freely accessible research
+repositories that an agent can consult before a general web search,
+which mostly surfaces blogs and advocacy sites. The catalogue covers
+primary-text libraries, open-access journals, Dead Sea Scrolls and
+Septuagint resources, patristic and Reformation texts, and Heiser's own
+sites. Each entry records its coverage, perspective and access or
+licence terms, and the date it was last verified. The tool filters by
+`topic` (loosely, against coverage tags and names) and by
+`perspective`. With `query`, it adds a URL-encoded search link for
+every source that supports one. The output states that these are
+places to look, not endorsements.
+
+`get_theology_context` and `get_study_notes` now point to the new tool
+for perspectives, journals and primary texts that they do not cover.
+
+### Link Checker
+
+`scripts/smoke_server.py --check-links` checks, over the network, every
+catalogue URL, every search template filled with a sample query, and
+every distinct `theology_content.url`. It falls back from `HEAD` to
+`GET`, reports broken links (status 400 or above, or a network error)
+with their origin, and exits non-zero when any link is broken. Sites
+that block automated clients carry an explicit `link_check: "skip"`
+with a reason.
+
+---
+
 ## Textual evidence and interpretation separation
 
 - Replaced the mixed textual-variant record with independent tables and output

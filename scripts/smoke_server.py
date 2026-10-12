@@ -6,20 +6,34 @@ skipped is decided before calling it, from the row counts of the tables it
 needs; a tool whose data is present must then return a real result. Handler
 errors, empty or no-match results with data present, and registry drift fail
 the run.
+
+With --check-links it instead checks external links over the network: every
+research-source URL, every research-source search template filled with a sample
+query, and every distinct theology_content.url in the database. A link is broken
+when it answers with status >= 400 or a network error. HEAD is tried first and
+GET is used when HEAD fails, because some sites reject HEAD. A catalogue entry
+marked "link_check": "skip" (with a "link_check_reason") is reported as skipped;
+use it only for sites that block automated clients.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import re
+import sqlite3
 import sys
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
+
+import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from study_bible_mcp.database import StudyBibleDB
-from study_bible_mcp.tools import TOOLS
+from study_bible_mcp.tools import TOOLS, load_research_sources, research_search_url
 import study_bible_mcp.server as server_module
 
 
@@ -78,6 +92,8 @@ TOOL_CASES: dict[str, tuple[dict, tuple[str, ...]]] = {
         {"reference": "Deuteronomy 32:8"},
         ("textual_variant_cases",),
     ),
+    # The catalogue ships with the package, so no table is required.
+    "list_research_sources": ({"topic": "rabbinic", "query": "Psalm 82"}, ()),
 }
 
 # Matched against the first line of a response only, so words such as
@@ -132,16 +148,134 @@ async def run(db_path: Path) -> bool:
     return failures == 0
 
 
+# =========================================================================
+# Link checker (--check-links)
+# =========================================================================
+
+LINK_CHECK_SAMPLE_QUERY = "Psalm 82"
+LINK_CHECK_CONCURRENCY = 8
+LINK_CHECK_TIMEOUT = 20.0
+_USER_AGENT = "Mozilla/5.0 (compatible; studybible-mcp link checker; +https://github.com/djayatillake/studybible-mcp)"
+
+# Returns the final HTTP status for a URL; raises httpx.HTTPError on network failure.
+Fetcher = Callable[[str], Awaitable[int]]
+
+
+@dataclass
+class LinkResult:
+    url: str
+    origins: list[str]
+    status: int | None
+    error: str | None
+
+    @property
+    def broken(self) -> bool:
+        return self.error is not None or self.status is None or self.status >= 400
+
+
+def collect_link_targets(db_path: Path | None) -> tuple[dict[str, list[str]], list[str]]:
+    """Map each distinct URL to where it came from; also return skipped-entry notes."""
+    targets: dict[str, list[str]] = {}
+    skipped: list[str] = []
+    for source in load_research_sources():
+        if source.get("link_check") == "skip":
+            skipped.append(f"research_sources:{source['key']} — {source['link_check_reason']}")
+            continue
+        targets.setdefault(source["url"], []).append(f"research_sources:{source['key']} url")
+        search = research_search_url(source, LINK_CHECK_SAMPLE_QUERY)
+        if search:
+            targets.setdefault(search, []).append(f"research_sources:{source['key']} search")
+
+    if db_path is not None:
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+            rows = conn.execute(
+                "SELECT TRIM(url), source_author, GROUP_CONCAT(DISTINCT source_work), COUNT(*) "
+                "FROM theology_content WHERE url IS NOT NULL AND TRIM(url) <> '' "
+                "GROUP BY TRIM(url), source_author ORDER BY TRIM(url)"
+            ).fetchall()
+        for url, author, works, count in rows:
+            targets.setdefault(url, []).append(f"theology_content:{author} ({works}; {count} rows)")
+    return targets, skipped
+
+
+def make_http_fetcher(client: httpx.AsyncClient) -> Fetcher:
+    """HEAD first; fall back to a streamed GET when HEAD errors or is refused."""
+
+    async def fetch(url: str) -> int:
+        try:
+            response = await client.head(url)
+            if response.status_code < 400:
+                return response.status_code
+        except httpx.HTTPError:
+            pass
+        async with client.stream("GET", url) as response:
+            return response.status_code
+
+    return fetch
+
+
+async def check_links(
+    targets: dict[str, list[str]], fetch: Fetcher, concurrency: int = LINK_CHECK_CONCURRENCY
+) -> list[LinkResult]:
+    """Fetch every target with bounded concurrency; network errors become broken results."""
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def check(url: str, origins: list[str]) -> LinkResult:
+        async with semaphore:
+            try:
+                return LinkResult(url, origins, await fetch(url), None)
+            except (httpx.HTTPError, httpx.InvalidURL) as exc:
+                return LinkResult(url, origins, None, f"{type(exc).__name__}: {exc}".strip(": "))
+
+    return list(await asyncio.gather(*(check(url, origins) for url, origins in targets.items())))
+
+
+async def run_link_check(db_path: Path) -> bool:
+    if not db_path.is_file():
+        print(f"Database not found: {db_path}")
+        return False
+    targets, skipped = collect_link_targets(db_path)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # the report below lists every URL
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        timeout=LINK_CHECK_TIMEOUT,
+        headers={"User-Agent": _USER_AGENT},
+    ) as client:
+        results = await check_links(targets, make_http_fetcher(client))
+
+    broken = [r for r in results if r.broken]
+    for result in sorted(results, key=lambda r: r.url):
+        label = "BROKEN" if result.broken else "OK    "
+        outcome = result.error or result.status
+        print(f"{label} {outcome} {result.url}")
+        if result.broken:
+            for origin in result.origins:
+                print(f"         from {origin}")
+    for note in skipped:
+        print(f"SKIP   {note}")
+    print(f"\n{len(results)} links checked: {len(results) - len(broken)} ok, "
+          f"{len(broken)} broken, {len(skipped)} catalogue entries skipped")
+    return not broken
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--db",
         type=Path,
         default=Path(__file__).resolve().parent.parent / "db" / "study_bible.db",
         help="Path to the full study_bible.db",
     )
+    parser.add_argument(
+        "--check-links",
+        action="store_true",
+        help="Check external links (network) instead of running the tool smoke cases",
+    )
     args = parser.parse_args()
-    raise SystemExit(0 if asyncio.run(run(args.db)) else 1)
+    job = run_link_check(args.db) if args.check_links else run(args.db)
+    raise SystemExit(0 if asyncio.run(job) else 1)
 
 
 if __name__ == "__main__":

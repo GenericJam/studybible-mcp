@@ -579,6 +579,16 @@ variants. `lookup_verse` mentions when a verse has a catalogued variant case or
 interpretation notes. On a database that still has the legacy
 variant schema, the tool asks you to run `python scripts/upgrade_database.py`.
 
+### Further Research
+
+#### `list_research_sources`
+
+List curated, freely accessible research repositories to consult before a general web search: primary-text libraries (Sefaria, CCEL, Perseus, the Internet Archive), open-access journals (Tyndale Bulletin, Themelios, the Journal of Hebrew Scriptures, HTS), Dead Sea Scrolls and Septuagint resources, and Heiser's own sites. Each entry states its coverage, perspective (Jewish, Catholic, Reformed, evangelical, academic/critical, multi-tradition, single-author) and access or licence terms. Filter by `topic` (coverage tag or name, matched loosely) and `perspective`; pass `query` to get a ready-to-open search link for every source that supports one. The list is a set of places to look, not endorsements.
+
+The catalogue lives in [`src/study_bible_mcp/research_sources.json`](src/study_bible_mcp/research_sources.json). It is a directory of repositories, not a per-passage or per-scholar index.
+
+**Checking links.** `python scripts/smoke_server.py --db db/study_bible.db --check-links` fetches, over the network, every catalogue URL, every search template filled with a sample query, and every distinct `theology_content.url` in the database. Checks run with bounded concurrency and a timeout. Any link answering with status 400 or above, or failing at the network level, is reported with where it came from, and the run exits non-zero. Some sites refuse `HEAD` requests, so the checker falls back to `GET`. Some answer every automated client with a bot challenge; only for those, an entry may set `"link_check": "skip"` with a `"link_check_reason"`, and the checker lists it as skipped rather than checking it. Verify skipped entries by hand when updating `last_verified`.
+
 ---
 
 ## How Users Interact
@@ -889,6 +899,7 @@ studybible-mcp/
 │   ├── server.py              # MCP server (stdio, SSE, and Streamable HTTP)
 │   ├── database.py            # SQLite queries (async)
 │   ├── tools.py               # MCP tool definitions and output formatters
+│   ├── research_sources.json  # Curated open research repositories (list_research_sources)
 │   ├── hermeneutics.py        # Genre detection & interpretation
 │   └── parsers/
 │       ├── lexicon.py         # TFLSJ, BDB, Abbott-Smith, TBESG, TBESH parsers
@@ -907,7 +918,7 @@ studybible-mcp/
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
 │   ├── upgrade_database.py    # In-place schema/source upgrade of an existing DB
-│   └── smoke_server.py        # Full-database manual smoke suite
+│   └── smoke_server.py        # Full-database smoke suite; --check-links checks external URLs
 ├── tests/                     # Deterministic unit and tool-selection tests
 ├── prompts/
 │   └── system_prompt.md       # Full hermeneutical framework for agents
