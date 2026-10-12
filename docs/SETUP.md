@@ -48,13 +48,27 @@ Once connected, you have access to these tools:
 
 | Tool | Description | Example |
 |------|-------------|---------|
-| `lookup_verse` | Get verse text with Greek/Hebrew | "Look up John 3:16" |
-| `word_study` | Deep dive into a Greek/Hebrew word | "Study the Greek word for 'love'" |
-| `search_lexicon` | Search by English meaning | "Find Greek words meaning 'salvation'" |
-| `get_cross_references` | Find related passages | "Cross-references for Romans 3:21" |
-| `lookup_name` | Biblical person/place info | "Tell me about Abraham" |
+| `lookup_verse` | Verse text with Greek/Hebrew | "Look up John 3:16" |
+| `word_study` | Greek/Hebrew lexicon study | "Study G26" |
+| `search_lexicon` | Search lexicons by concept | "Greek words for love" |
+| `get_cross_references` | Related passages and theme chains | "Cross-references for Romans 3:21" |
+| `lookup_name` | Biblical person/place information | "Tell me about Abraham" |
 | `parse_morphology` | Explain grammar codes | "What does V-AAI-3S mean?" |
-| `search_by_strongs` | Find all uses of a word | "All verses with G26 (agape)" |
+| `search_by_strongs` | Find uses of a Strong's number | "Verses containing G26" |
+| `find_similar_passages` | Semantic passage similarity | "Passages like Isaiah 53" |
+| `get_study_notes` | Study and translation notes | "Notes on John 3:16" |
+| `get_bible_dictionary` | Tyndale Bible Dictionary | "Dictionary article on covenant" |
+| `get_key_terms` | FIA theological terms | "Define atonement" |
+| `explore_genealogy` | Ancestor/descendant trees | "David's ancestors" |
+| `people_in_passage` | People, places, and events in a passage | "Who is in Genesis 22?" |
+| `explore_person_events` | Chronological life events | "Events in Moses' life" |
+| `explore_place` | Biblical history of a place | "Explore Jerusalem" |
+| `find_connection` | Family path between two people | "Connect Ruth and Jesus" |
+| `graph_enriched_search` | Verse text plus graph context | "Enrich Matthew 1:1" |
+| `get_ane_context` | Ancient cultural context | "ANE context for Genesis 15" |
+| `get_theology_context` | Attributed theological scholarship | "Scholarship on Psalm 82" |
+| `get_torah_weave` | Torah structural pairings | "Pairings for Genesis 1:1" |
+| `get_textual_variant` | MT/LXX/DSS textual evidence | "Variant at Deuteronomy 32:8" |
 
 ## Example Questions
 
@@ -88,7 +102,7 @@ This tool uses the methodology from Fee & Stuart's "How to Read the Bible for Al
 - Check your internet connection
 
 ### Need help?
-Open an issue: https://github.com/yourusername/studybible-mcp/issues
+Open an issue: https://github.com/djayatillake/studybible-mcp/issues
 
 ## Self-Hosting
 

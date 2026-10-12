@@ -12,7 +12,7 @@ This guide covers running your own instance of the Study Bible MCP server.
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/studybible-mcp.git
+   git clone https://github.com/djayatillake/studybible-mcp.git
    cd studybible-mcp
    ```
 
@@ -37,7 +37,7 @@ This guide covers running your own instance of the Study Bible MCP server.
    ```bash
    python scripts/build_database.py
    ```
-   This creates `db/study_bible.db` (~100MB).
+   This creates the base `db/study_bible.db`. Its final size depends on the optional graph, commentary, and embedding datasets; the deployed database is currently over 600MB.
 
 6. **Run the server**
 
@@ -46,9 +46,9 @@ This guide covers running your own instance of the Study Bible MCP server.
    python -m study_bible_mcp.server --transport stdio
    ```
 
-   For network access (SSE):
+   For network access (Streamable HTTP at `/mcp/`, with legacy SSE at `/sse`):
    ```bash
-   python -m study_bible_mcp.server --transport sse --port 8080
+   python -m study_bible_mcp.server --transport http --port 8080
    ```
 
 ### Claude Desktop Configuration (Local)
@@ -75,14 +75,14 @@ This guide covers running your own instance of the Study Bible MCP server.
 docker build -t studybible-mcp .
 ```
 
-The Dockerfile downloads STEPBible data and builds the database during the build process.
+The Docker image contains the server code only. It expects a pre-built database to be mounted at `/data/study_bible.db`.
 
 ### Run Locally
 
 ```bash
-docker run -p 8080:8080 studybible-mcp
+docker run -p 8080:8080 \
+  -v /absolute/path/to/db:/data:ro studybible-mcp
 ```
-
 Test the server:
 ```bash
 curl http://localhost:8080/health
@@ -95,7 +95,7 @@ curl http://localhost:8080/health
   "mcpServers": {
     "study-bible": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8080/sse"]
+      "args": ["-y", "mcp-remote", "http://localhost:8080/mcp/"]
     }
   }
 }
@@ -167,7 +167,7 @@ curl http://localhost:8080/health
 
 Your server will be available at:
 ```
-https://your-studybible-mcp.fly.dev/sse
+https://your-studybible-mcp.fly.dev/mcp/
 ```
 
 ---
@@ -177,8 +177,8 @@ https://your-studybible-mcp.fly.dev/sse
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `STUDY_BIBLE_DB` | Path to SQLite database | Auto-detected |
-| `PORT` | Server port (SSE mode) | `8080` |
-| `TRANSPORT` | Transport mode (`stdio` or `sse`) | `stdio` |
+| `PORT` | Server port for HTTP/SSE transports | `8080` |
+| `TRANSPORT` | Transport mode (`stdio`, `sse`, or `http`) | `stdio` |
 
 ---
 
@@ -194,7 +194,7 @@ python scripts/download_stepbible.py --force
 python scripts/build_database.py --rebuild
 ```
 
-For Docker/Fly.io, rebuild the image to include the new database.
+For Docker, restart the container with the rebuilt database mount. On Fly.io, upload the database to the persistent volume separately from the code deployment; see `.claude/commands/deploy-db.md`.
 
 ---
 
@@ -220,13 +220,12 @@ fly ssh console
 ## Cost Estimates
 
 ### Fly.io
-- **Free tier**: 3 shared-cpu-1x VMs with 256MB RAM each
-- **This app**: Uses ~256-512MB RAM, fits in free tier
-- **Volume**: 1GB volume is $0.15/month
+- Check current Fly.io pricing and allowances before deploying.
+- The production configuration uses one shared CPU, 1GB RAM, and a persistent volume.
 
 ### Self-hosted
-- Any server with Python 3.10+ and 256MB+ RAM
-- Database is ~100MB, read-only
+- Python 3.10+ and enough memory for SQLite queries
+- At least 1GB of database storage; allow additional space for downloads, rebuilds, and embeddings
 
 ---
 
