@@ -142,11 +142,13 @@ You can download the pre-built database directly: **[study_bible.db](https://stu
 
 #### 1. `lookup_verse`
 
-Retrieve a verse with its original language text and word-by-word analysis.
+Retrieve a verse, verse range, or whole chapter with its original language text and word-by-word analysis.
 
-**When Claude uses it**: User asks about a specific verse, wants to see the Greek or Hebrew text, or asks about specific words in a passage.
+**When Claude uses it**: User asks about a specific verse or passage, wants to see the Greek or Hebrew text, or asks about specific words in a passage.
 
-**What it returns**: English translation, original Greek/Hebrew text, word-by-word breakdown with Strong's numbers, morphological parsing, genre-specific interpretation guidance.
+**Accepted references**: a verse (`John 3:16`), a range within a chapter (`Luke 19:1-3`; an en dash also works), a cross-chapter range (`Luke 19:45-20:2`), or whole chapters (`Psalm 23`, `Psalm 23-24`). Single-chapter books (Obadiah, Philemon, 2 John, 3 John, Jude) may be cited by verse alone, as is conventional: `Jude 3` means `Jude 1:3` and a bare `Jude` means the whole book. This applies to every tool's `reference` argument. Verses are matched by English chapter/verse numbering, so Old Testament verses whose Hebrew numbering differs (e.g. `Psalm 40:6`, stored as `Psa.40.6(40.7)`) are found, and an English verse stored as several source rows returns all of them. A Psalm superscription, which is verse 1 in the Hebrew, is headed as such (`Psa.82 superscription (Hebrew Psa.82.1)`). A passage returns at most 50 verses; longer requests (e.g. `Psalm 119`) open with a note naming the reference that continues the passage. Unknown books, missing chapters or verses, and reversed ranges get a message saying what exists.
+
+**What it returns**: English word-by-word gloss text, original Greek/Hebrew text, word-by-word breakdown with Strong's numbers, optional morphological parsing, and genre-specific interpretation guidance. Notes about cross-references, Torah Weave partners, and NT/OT LXX quotations appear once per lookup; for a passage they name a verse to pass to those single-verse tools.
 
 **Example**:
 ```
