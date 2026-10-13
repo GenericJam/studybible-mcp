@@ -23,9 +23,9 @@ for perspectives, journals and primary texts that they do not cover.
 
 ### Link Checker
 
-`scripts/smoke_server.py --check-links` checks, over the network, every
-catalogue URL, every search template filled with a sample query, and
-every distinct `theology_content.url`. It falls back from `HEAD` to
+`scripts/check_links.py` checks, over the network, every catalogue URL,
+every search template filled with a sample query, and (when the database
+is present) every distinct `theology_content.url`. It falls back from `HEAD` to
 `GET`, reports broken links (status 400 or above, or a network error)
 with their origin, and exits non-zero when any link is broken. A
 timed-out link is retried once with a 60-second limit and reported as

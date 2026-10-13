@@ -587,7 +587,7 @@ List curated, freely accessible research repositories to consult before a genera
 
 The catalogue lives in [`src/study_bible_mcp/research_sources.json`](src/study_bible_mcp/research_sources.json). It is a directory of repositories, not a per-passage or per-scholar index.
 
-**Checking links.** `python scripts/smoke_server.py --db db/study_bible.db --check-links` fetches, over the network, every catalogue URL, every search template filled with a sample query, and every distinct `theology_content.url` in the database. Checks run with bounded concurrency and a 20-second timeout; a link that times out is retried once with a 60-second limit, because some hosts are slow rather than dead. Any link answering with status 400 or above, or failing at the network level, is reported as `BROKEN` with where it came from; one that still times out after the retry is reported as `TIMEOUT`. Either makes the run exit non-zero. Hosts known to be slow but working are listed in `LINK_CHECK_SLOW_HOSTS` in the script (currently `drmsh.com`, which has taken 31-57 seconds to answer): their retry gets a 180-second limit, and a timeout that still persists is reported as `SLOW`, a warning that does not fail the run. A real error status from those hosts still does. Some sites refuse `HEAD` requests, so the checker falls back to `GET`. Some answer every automated client with a bot challenge; only for those, an entry may set `"link_check": "skip"` with a `"link_check_reason"`, and the checker lists it as skipped rather than checking it. Verify skipped entries by hand when updating `last_verified`.
+**Checking links.** `python scripts/check_links.py` fetches, over the network, every catalogue URL, every search template filled with a sample query, and (when `db/study_bible.db` or `--db` is present) every distinct `theology_content.url` in the database. It makes about 100 requests to third-party sites, so run it occasionally rather than in CI. Checks run with bounded concurrency and a 20-second timeout; a link that times out is retried once with a 60-second limit, because some hosts are slow rather than dead. Any link answering with status 400 or above, or failing at the network level, is reported as `BROKEN` with where it came from; one that still times out after the retry is reported as `TIMEOUT`. Either makes the run exit non-zero. Hosts known to be slow but working are listed in `LINK_CHECK_SLOW_HOSTS` in the script (currently `drmsh.com`, which has taken 31-57 seconds to answer): their retry gets a 180-second limit, and a timeout that still persists is reported as `SLOW`, a warning that does not fail the run. A real error status from those hosts still does. Some sites refuse `HEAD` requests, so the checker falls back to `GET`. Some answer every automated client with a bot challenge; only for those, an entry may set `"link_check": "skip"` with a `"link_check_reason"`, and the checker lists it as skipped rather than checking it. Verify skipped entries by hand when updating `last_verified`.
 
 ---
 
@@ -918,7 +918,8 @@ studybible-mcp/
 │   ├── generate_embeddings.py # Generate vector embeddings
 │   ├── import_theographic.py  # Import Theographic graph data
 │   ├── upgrade_database.py    # In-place schema/source upgrade of an existing DB
-│   └── smoke_server.py        # Full-database smoke suite; --check-links checks external URLs
+│   ├── smoke_server.py        # Full-database smoke suite
+│   └── check_links.py         # Checks research-source and theology URLs (network)
 ├── tests/                     # Deterministic unit and tool-selection tests
 ├── prompts/
 │   └── system_prompt.md       # Full hermeneutical framework for agents

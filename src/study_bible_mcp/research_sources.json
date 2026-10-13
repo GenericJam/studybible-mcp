@@ -50,7 +50,7 @@
     "description": "English translations of the Church Fathers indexed by author and work; the same site hosts the Catholic Encyclopedia and Aquinas's Summa.",
     "coverage": ["church fathers", "primary texts", "patristic translations"],
     "perspective": "Catholic",
-    "access": "free to read, copyrighted (site © New Advent)",
+    "access": "free to read; the translations are the public-domain 19th-century Roberts–Donaldson and Schaff–Wace editions (site edition © New Advent)",
     "search_url_template": null,
     "last_verified": "2026-10-12"
   },
@@ -71,7 +71,7 @@
     "url": "https://www.prdl.org/",
     "description": "Index of digitised Reformation and post-Reformation theology, linking to scans held by libraries; authors are tagged by confession (Reformed, Lutheran, and others).",
     "coverage": ["reformation", "post-reformation", "primary texts", "protestant scholasticism"],
-    "perspective": "Reformed",
+    "perspective": "multi-tradition",
     "access": "free index of links to digitised works",
     "search_url_template": "https://www.prdl.org/search.php?q={query}",
     "last_verified": "2026-10-12"
@@ -240,7 +240,7 @@
     "key": "online_critical_pseudepigrapha",
     "name": "Online Critical Pseudepigrapha",
     "url": "https://pseudepigrapha.org/",
-    "description": "Critical electronic editions of Old Testament pseudepigrapha (such as 1 Enoch and the Testament of Job) in their ancient languages.",
+    "description": "Critical electronic editions of non-canonical Old Testament pseudepigrapha (such as 1 Enoch and the Testament of Job) in their ancient languages.",
     "coverage": ["second temple", "pseudepigrapha", "primary texts"],
     "perspective": "academic/critical",
     "access": "open access; GPL v3.0 and Creative Commons",
@@ -250,7 +250,7 @@
   {
     "key": "nets",
     "name": "New English Translation of the Septuagint (electronic edition)",
-    "url": "http://ccat.sas.upenn.edu/nets/edition/",
+    "url": "https://ccat.sas.upenn.edu/nets/edition/",
     "description": "Book-by-book PDFs of NETS, the scholarly English translation of the Septuagint, with translators' introductions.",
     "coverage": ["septuagint", "primary texts", "translations"],
     "perspective": "academic/critical",
@@ -295,9 +295,9 @@
     "key": "early_christian_writings",
     "name": "Early Christian Writings",
     "url": "https://www.earlychristianwritings.com/",
-    "description": "Chronological index of early Christian texts (New Testament, apocrypha, gnostic and patristic writings) with translations and introductory notes.",
+    "description": "A personal site compiled by Peter Kirby: a chronological index of early Christian texts (New Testament, apocrypha, gnostic and patristic writings) with translations and his introductory notes.",
     "coverage": ["new testament", "apocrypha", "church fathers", "primary texts"],
-    "perspective": "academic/critical",
+    "perspective": "single-author",
     "access": "free to read, copyrighted (site © Peter Kirby)",
     "search_url_template": null,
     "last_verified": "2026-10-12"
@@ -367,7 +367,7 @@
     "coverage": ["out-of-print books", "commentaries", "primary texts"],
     "perspective": "multi-tradition",
     "access": "full view mostly public domain; some publisher-permitted",
-    "search_url_template": "https://www.google.com/search?tbm=bks&tbs=bkv%3Af&q={query}",
+    "search_url_template": null,
     "last_verified": "2026-10-12"
   },
   {

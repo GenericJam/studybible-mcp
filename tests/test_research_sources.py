@@ -14,18 +14,19 @@ import pytest
 import study_bible_mcp.server as server_module
 from study_bible_mcp.tools import (
     find_research_sources,
+    format_research_sources,
     load_research_sources,
     research_search_url,
 )
 
-_SMOKE_PATH = Path(__file__).resolve().parent.parent / "scripts" / "smoke_server.py"
+_CHECK_LINKS_PATH = Path(__file__).resolve().parent.parent / "scripts" / "check_links.py"
 
 
 @pytest.fixture(scope="module")
 def smoke():
-    spec = importlib.util.spec_from_file_location("smoke_server", _SMOKE_PATH)
+    spec = importlib.util.spec_from_file_location("check_links", _CHECK_LINKS_PATH)
     module = importlib.util.module_from_spec(spec)
-    sys.modules["smoke_server"] = module
+    sys.modules["check_links"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -162,7 +163,7 @@ class TestTool:
 
 
 # ---------------------------------------------------------------------------
-# Link checker (scripts/smoke_server.py --check-links)
+# Link checker (scripts/check_links.py)
 # ---------------------------------------------------------------------------
 
 class TestLinkChecker:
@@ -282,3 +283,33 @@ class TestLinkChecker:
         assert len(skipped) == len(skipped_keys)
         for key in skipped_keys:
             assert not any(f"research_sources:{key} " in o for os in targets.values() for o in os)
+
+
+# ---------------------------------------------------------------------------
+# Output economy and catalogue labels
+# ---------------------------------------------------------------------------
+
+async def test_default_returns_four_sources():
+    [result] = await server_module.handle_list_research_sources({})
+    total = len(load_research_sources())
+    assert f"Showing 4 of {total} matching sources." in result.text
+    assert result.text.count("\n### ") == 4
+
+
+def test_verification_date_shown_is_the_oldest():
+    sources = [
+        dict(_source("sefaria"), last_verified="2026-10-12"),
+        dict(_source("ccel"), last_verified="2026-01-05"),
+    ]
+    output = format_research_sources(sources, total=2)
+    assert "*Listings verified on or after 2026-01-05.*" in output
+
+
+def test_no_search_template_queries_google_web_search():
+    for source in load_research_sources():
+        template = source.get("search_url_template") or ""
+        assert "google.com/search" not in template, source["key"]
+
+
+def test_pseudepigrapha_listing_is_labelled_non_canonical():
+    assert "non-canonical" in _source("online_critical_pseudepigrapha")["description"]

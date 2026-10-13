@@ -56,8 +56,8 @@ def _truncate(text: str, limit: int, suffix: str = "\n\n*[Truncated]*") -> str:
     return text[:limit] + suffix
 
 
-RESEARCH_SOURCES_DEFAULT_LIMIT = 12
-RESEARCH_SOURCES_MAX_LIMIT = 40
+RESEARCH_SOURCES_DEFAULT_LIMIT = 4
+RESEARCH_SOURCES_MAX_LIMIT = 10
 
 
 TOOLS = [
@@ -720,8 +720,7 @@ Returns combined commentary from:
 Relevant for published commentary on a specific verse, difficult passages,
 translation and cultural background, and chapter-level overviews of themes and
 context. The content is published scholarship, quoted as-is with source
-attribution. For journal articles or other traditions' commentary, use
-`list_research_sources`.""",
+attribution. For journal articles, see `list_research_sources`.""",
         inputSchema={
             "type": "object",
             "properties": {
@@ -904,8 +903,8 @@ Coverage by topic, with the author and theme keys that hold it:
 
 Each entry includes a Source URL when the source is freely available online: Owen's public-domain text (CCEL chapter pages; Monergism volume PDFs for the Exposition of Hebrews), Heiser's papers and Naked Bible podcast transcripts, and Burnett's article series. Stott, Lennox, and Bradley entries have no URL.
 
-Query by verse reference, theme key, and/or author. Only these few authors are
-covered; for other perspectives or primary texts, use `list_research_sources`.""",
+Query by verse reference, theme key, and/or author. For other authors, see
+`list_research_sources`.""",
         inputSchema={
             "type": "object",
             "properties": {
@@ -1012,34 +1011,21 @@ alignment.""",
     Tool(
         name="list_research_sources",
         annotations=ToolAnnotations(title="Research Sources", readOnlyHint=True, destructiveHint=False, idempotentHint=True),
-        description="""Find free, reliable places to look for scholarly articles, primary texts, and commentary beyond this server's data: open journals, digital libraries, and text archives to consult before a general web search.
-
-Returns a curated catalogue of open research repositories with what each covers,
-its perspective (Jewish, Catholic, Reformed, evangelical, academic/critical,
-multi-tradition, or single-author), and its access and licence terms. With a
-`query`, every source that has a linkable search gets a ready-to-open search URL.
-
-Relevant when the server's own data does not cover a question: where to find
-scholarly articles on a passage (e.g. Psalm 82 or John 10:34), other authors or
-traditions, church fathers, rabbinic commentary, Dead Sea Scrolls, Septuagint
-scholarship, or older public-domain books.
-
-These are places to look, not endorsements; each listing states its perspective
-so the reader can weigh it.""",
+        description="""Find free, reliable places to look for scholarly articles, primary texts, and commentary beyond this server's data, before a general web search: open journals, digital libraries, and text archives covering other authors and traditions, church fathers, rabbinic texts, Dead Sea Scrolls, Septuagint studies, and public-domain books. Each listing gives coverage, perspective, and access terms; with a `query`, sources that support it get a ready-to-open search link. Places to look, not endorsements.""",
         inputSchema={
             "type": "object",
             "properties": {
                 "topic": {
                     "type": "string",
-                    "description": "Coverage tag or source name, matched loosely (e.g., 'rabbinic', 'church fathers', 'dead sea scrolls', 'septuagint', 'biblical studies articles', 'reformation', 'divine council', 'Sefaria')"
+                    "description": "Coverage tag or source name, matched loosely (e.g. 'rabbinic', 'church fathers', 'dead sea scrolls', 'septuagint')"
                 },
                 "query": {
                     "type": "string",
-                    "description": "Search terms to turn into a ready-to-open search link for each source that supports one (e.g., 'Psalm 82', 'sons of God')"
+                    "description": "Search terms for each source's search link (e.g. 'Psalm 82')"
                 },
                 "perspective": {
                     "type": "string",
-                    "description": "Filter by perspective: 'Jewish', 'Catholic', 'Reformed', 'evangelical', 'academic', 'multi-tradition', or 'single-author'"
+                    "description": "Jewish, Catholic, Reformed, evangelical, academic, multi-tradition, or single-author"
                 },
                 "limit": {
                     "type": "integer",
@@ -1257,7 +1243,8 @@ def format_research_sources(
             else:
                 lines.append("- **Search**: no linkable search; browse or use the site's own search")
         lines.append("")
-    lines.append(f"*Catalogue last verified: {max(s['last_verified'] for s in sources)}.*")
+    # The oldest date is the one a reader can rely on for every listing shown.
+    lines.append(f"*Listings verified on or after {min(s['last_verified'] for s in sources)}.*")
     return "\n".join(lines)
 
 
