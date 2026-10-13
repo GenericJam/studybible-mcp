@@ -637,7 +637,9 @@ def iter_lxx_rows(
     Rows carrying Brenton's English are compared with Brenton's own Greek for
     the same verse: ``brenton_greek_differs`` is 1 when it differs from Rahlfs
     (and Brenton's Greek plus a difference summary are stored), 0 when it
-    agrees, and NULL when there is no English or no Brenton Greek verse.
+    agrees, and NULL when there is no English or no Brenton Greek verse. Books
+    whose English is the KJV Apocrypha are not compared (NULL): that English
+    does not translate Brenton's Greek.
     """
     rahlfs_words = _rahlfs_words(morphology_dir) if brenton_greek else frozenset()
     for path in sorted(morphology_dir.glob("*.json")):
@@ -678,7 +680,11 @@ def iter_lxx_rows(
                 positions.append((None, None, None, None, "", translation, unpaired_method))
 
             comparison: tuple[int | None, str | None, str | None] = (None, None, None)
-            if greek_texts[index] and any(position[5] for position in positions):
+            if (
+                greek_texts[index]
+                and edition_book not in KJV_APOCRYPHA_BOOKS
+                and any(position[5] for position in positions)
+            ):
                 difference = compare_brenton_greek(
                     _neighbours(texts, index), _neighbours(greek_texts, index), rahlfs_words
                 )

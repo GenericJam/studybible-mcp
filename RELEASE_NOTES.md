@@ -104,9 +104,10 @@
   Apocrypha and warn that the English is not a translation of the Greek shown
   (Sirach 17:17 adds "in the division of the nations of the whole earth");
   they are not compared with Brenton's Greek, which is not what they translate.
-- 10,756 of the 28,314 rows with Brenton's English (38%) are flagged. Brenton's
-  Greek and the summary are stored only on flagged rows, which adds about 5 MB to
-  the database. Existing comparison tables gain the new columns on re-import.
+- 8,938 of the 23,747 rows with Brenton's own English (38%) are flagged; the
+  4,567 KJV Apocrypha rows are not compared. Brenton's Greek and the summary
+  are stored only on flagged rows, which adds about 5 MB to the database.
+  Existing comparison tables gain the new columns on re-import.
 
 ---
 

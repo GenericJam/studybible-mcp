@@ -208,8 +208,8 @@ there with a note naming the verse to continue from.
   warning, a difference summary, and Brenton's Greek as the text his English
   translates. Deuteronomy 32:43, for example, reports "word order differs (υἱοὶ
   ἄγγελοι)", and Psalm 40:6 reports "Brenton's Greek reads σῶμα for ὠτία".
-  Differing verse divisions do not count as differences. About 38% of the
-  28,314 rows with Brenton's English are flagged. Unflagged rows can still
+  Differing verse divisions do not count as differences. 8,938 of the 23,747
+  rows with Brenton's own English (38%) are flagged. Unflagged rows can still
   differ, because a Greek-to-Greek comparison cannot see where his English
   departs from his own Greek.
 - **Eleven Apocrypha books carry the King James Version, not Brenton's

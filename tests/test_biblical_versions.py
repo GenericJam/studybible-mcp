@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from study_bible_mcp import database as database_module, server
+from study_bible_mcp.parsers import biblical_versions as biblical_versions_module
 from study_bible_mcp.database import StudyBibleDB, create_schema, parse_passage_reference
 from study_bible_mcp.parsers.biblical_versions import (
     BRENTON_BOOK_CODES,
@@ -603,6 +604,20 @@ async def test_kjv_apocrypha_english_is_labelled_and_warned(tmp_path):
     assert "Brenton's English:" not in output and "English (Brenton)" not in output
     assert "Brenton's Greek (the text" not in output and "not compared" not in output
     assert output.index("Warning") < output.index("**English (KJV")
+
+
+def test_kjv_apocrypha_books_are_not_compared_with_brentons_greek(tmp_path, monkeypatch):
+    # Deuteronomy 32:43 differs from Brenton's Greek fixture (it is flagged
+    # elsewhere); as a KJV Apocrypha book it must be stored uncompared.
+    monkeypatch.setattr(biblical_versions_module, "KJV_APOCRYPHA_BOOKS", frozenset({"Deu"}))
+    conn = sqlite3.connect(_build_db(tmp_path))
+    stored = conn.execute(
+        """SELECT brenton_greek_differs, brenton_greek, brenton_greek_difference
+           FROM biblical_version_verses WHERE edition_reference = 'Deu.32.43'"""
+    ).fetchall()
+    conn.close()
+
+    assert stored == [(None, None, None)]
 
 
 def test_import_adds_comparison_columns_to_an_existing_table(tmp_path):
