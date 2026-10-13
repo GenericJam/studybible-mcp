@@ -2,6 +2,30 @@
 
 ---
 
+## Verse ranges and chapters in lookup_verse
+
+- `lookup_verse` now returns every verse of a range (`Luke 19:1-3`, en dash
+  accepted), a cross-chapter range (`Luke 19:45-20:2`), or whole chapters
+  (`Luke 19`, `Psalm 23-24`); previously a range returned only its first verse
+  and a chapter returned "Verse not found".
+- Verses are matched on English book/chapter/verse numbering instead of
+  reference strings, so split English(Hebrew) references such as
+  `Psa.40.6(40.7)` resolve directly, and an English verse stored as two source
+  rows (e.g. `1 Chronicles 12:4`) returns both.
+- Passages are capped at 50 verses with a note naming the continuation
+  reference; reversed ranges, unknown books, and missing chapters or verses get
+  a message stating what exists.
+- Cross-reference, Torah Weave, and LXX-quotation notes appear once per
+  passage and point at a verse inside it. Single-verse output is otherwise
+  unchanged.
+- Single-chapter books (Obadiah, Philemon, 2 John, 3 John, Jude) can be cited
+  by verse alone (`Jude 3`, `Philemon 6`, `3 John 4`) in every tool's
+  reference argument; previously `Jude 3` was read as chapter 3.
+- Psalm superscriptions are headed `Psa.82 superscription (Hebrew Psa.82.1)`
+  instead of the raw `Psa.82.0(82.1)`.
+
+---
+
 ## Research Sources Catalogue & Link Checker
 
 ### New Tool

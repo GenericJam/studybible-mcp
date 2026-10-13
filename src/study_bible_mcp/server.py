@@ -28,7 +28,12 @@ from mcp.types import (
 
 import json
 
-from .database import BOOK_ABBREV_MAP, INTERPRETIVE_CASE_KEYS, StudyBibleDB
+from .database import (
+    BOOK_ABBREV_MAP,
+    INTERPRETIVE_CASE_KEYS,
+    StudyBibleDB,
+    expand_single_chapter_reference,
+)
 
 # Purple book with gold cross icon (32x32 PNG, base64 encoded)
 ICON_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR42mNgGOmAEZtgQ9TV/7SwrGGZNiNeB9DKYnwOYcGl6MajG1S1VENOA6s4E4yxounvfw0NDZpYjm4mckgz0drnhMxmIdew5bO3M9w+twfOr5veS5Y5TAOdDUcdMOAOYCE2wWEDqkYueNVEpnpSxwHIqR3ZcmziqMBzNA1QJwqwFTLocT5aEI06YNQBow6gaUGEDUAqGk/qhwCu1iutWsY4+wW0bJYT1S+gZUgMqq7ZKAAA/oE/8EmGTpMAAAAASUVORK5CYII="
@@ -48,6 +53,7 @@ from .tools import (
     find_research_sources, format_research_sources,
 )
 from .hermeneutics import (
+    get_genre,
     get_genre_from_reference,
     format_genre_guidance,
     get_reasoning_pattern,
@@ -121,6 +127,10 @@ async def list_tools() -> list[Tool]:
     return TOOLS
 
 
+# Tool arguments that hold a Bible reference.
+_REFERENCE_ARGUMENTS = ("reference", "biblical_reference")
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls."""
@@ -136,6 +146,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
         return text(f"Unknown tool: {name}")
+
+    # Single-chapter books are cited by verse alone ("Jude 3"); every tool
+    # parses chapter:verse, so rewrite those citations once at the boundary.
+    arguments = dict(arguments or {})
+    for key in _REFERENCE_ARGUMENTS:
+        if isinstance(arguments.get(key), str):
+            arguments[key] = expand_single_chapter_reference(arguments[key])
 
     try:
         return await handler(arguments)
@@ -174,87 +191,264 @@ async def handle_word_study(args: dict[str, Any]) -> list[TextContent]:
     return text(result)
 
 
+# Upper bound on verses returned by one lookup_verse call; longer passages
+# (e.g. Psalm 119) are cut with a note naming the continuation reference.
+LOOKUP_VERSE_MAX_VERSES = 50
+
+_LOOKUP_VERSE_FORMS = (
+    "a verse ('John 3:16'), a verse range ('Luke 19:1-3'), a cross-chapter "
+    "range ('Luke 19:45-20:2'), or a whole chapter ('Psalm 23')"
+)
+
+
+def _passage_label(book_name: str, start: tuple[int, int], end: tuple[int, int]) -> str:
+    """Render an English-numbered span as 'Luke 19:1-3' or 'Luke 19:45-20:2'."""
+    (sc, sv), (ec, ev) = start, end
+    if (sc, sv) == (ec, ev):
+        return f"{book_name} {sc}:{sv}"
+    if sc == ec:
+        return f"{book_name} {sc}:{sv}-{ev}"
+    return f"{book_name} {sc}:{sv}-{ec}:{ev}"
+
+
 async def handle_lookup_verse(args: dict[str, Any]) -> list[TextContent]:
-    """Handle lookup_verse tool - get scripture text with optional Greek/Hebrew."""
-    reference = args.get("reference", "")
+    """Handle lookup_verse tool - get scripture text with optional Greek/Hebrew.
+
+    Accepts single verses, verse ranges, cross-chapter ranges, and whole
+    chapters. Verses are matched on English numbering, so OT rows stored with
+    split English(Hebrew) references are found too.
+    """
+    reference = args.get("reference", "").strip()
     include_original = args.get("include_original", True)
     include_morphology = args.get("include_morphology", False)
 
     if not reference:
         return text("Please provide a verse reference (e.g., 'John 3:16').")
 
-    verse = await db.get_verse(reference)
+    parsed = db.parse_passage_reference(reference)
+    if parsed is None:
+        return text(
+            f"Could not read '{reference}' as a Bible reference. "
+            f"Supported forms: {_LOOKUP_VERSE_FORMS}."
+        )
+    book, book_name = parsed["book"], parsed["book_name"]
 
-    if not verse:
-        return text(f"Verse not found: {reference}")
+    bounds = await db.get_chapter_verse_bounds(book)
+    if not bounds:
+        if not await db._table_has_rows("verses"):
+            return text(
+                "The verses table is missing or empty. "
+                "Run 'python scripts/build_database.py' to build it."
+            )
+        return text(
+            f"Unknown book '{book_name}' in '{reference}'. Use a book name or "
+            "abbreviation such as 'John', 'Gen', or '1 Corinthians'."
+        )
 
-    result = format_verse(verse, include_original, include_morphology)
+    start_chapter, end_chapter = parsed["start_chapter"], parsed["end_chapter"]
+    for chapter in (start_chapter, end_chapter):
+        if chapter not in bounds:
+            return text(
+                f"{book_name} has no chapter {chapter} "
+                f"(chapters {min(bounds)}–{max(bounds)})."
+            )
+    start_verse = parsed["start_verse"]
+    if start_verse is None:
+        start_verse = bounds[start_chapter][0]
+    end_verse = parsed["end_verse"]
+    if end_verse is None:
+        end_verse = bounds[end_chapter][1]
 
-    # Add genre guidance if available
-    genre = get_genre_from_reference(reference)
+    first, last = bounds[start_chapter]
+    if not first <= start_verse <= last:
+        return text(
+            f"{book_name} {start_chapter} has no verse {start_verse} "
+            f"(verses {first}–{last})."
+        )
+    if (end_chapter, end_verse) < (start_chapter, start_verse):
+        return text(f"Invalid range '{reference}': the end comes before the start.")
+
+    notes = []
+    chapter_end = bounds[end_chapter][1]
+    if end_verse > chapter_end:
+        notes.append(
+            f"{book_name} {end_chapter} ends at verse {chapter_end}; "
+            f"showing through {end_chapter}:{chapter_end}."
+        )
+        end_verse = chapter_end
+
+    rows = await db.get_passage(book, start_chapter, start_verse, end_chapter, end_verse)
+    if not rows:
+        return text(f"No verse text on file for {reference}.")
+
+    # A verse may be stored as several rows; cap on distinct numbered verses
+    # (a verse-0 psalm superscription is shown but not counted).
+    verse_keys = list(dict.fromkeys((row["chapter"], row["verse"]) for row in rows))
+    numbered = [key for key in verse_keys if key[1] > 0]
+    if len(numbered) > LOOKUP_VERSE_MAX_VERSES:
+        last_shown = numbered[LOOKUP_VERSE_MAX_VERSES - 1]
+        rows = [row for row in rows if (row["chapter"], row["verse"]) <= last_shown]
+        rest = _passage_label(book_name, numbered[LOOKUP_VERSE_MAX_VERSES], numbered[-1])
+        notes.append(
+            f"Showing the first {LOOKUP_VERSE_MAX_VERSES} of {len(numbered)} "
+            f"verses. Continue with reference='{rest}'."
+        )
+        verse_keys = [key for key in verse_keys if key <= last_shown]
+    shown_start, shown_end = verse_keys[0], verse_keys[-1]
+    single = shown_start == shown_end
+    if shown_start[1] == 0 and len(verse_keys) > 1:
+        shown_start = verse_keys[1]
+
+    # A passage omits the per-word Strong's list (most of its size) unless
+    # morphology is requested; a single verse keeps it.
+    include_words = single or include_morphology
+    verse_text = "\n".join(
+        format_verse(row, include_original, include_morphology, include_words)
+        for row in rows
+    )
+    whole_chapters = parsed["start_verse"] is None and parsed["end_verse"] is None
+    if single and not notes:
+        result = verse_text
+    else:
+        if whole_chapters and not notes:
+            label = f"{book_name} {start_chapter}"
+            if end_chapter != start_chapter:
+                label += f"-{end_chapter}"
+        else:
+            label = _passage_label(book_name, shown_start, shown_end)
+        header = f"# {label}\n\n"
+        if notes:
+            header += "".join(f"*{note}*\n" for note in notes) + "\n"
+        result = header + verse_text
+
+    # Hints below are emitted once for the whole passage. Their target tools
+    # take one verse, so a passage points them at its first numbered verse
+    # (skipping a verse-0 psalm title).
+    if single and not notes:
+        hint_reference = reference
+    else:
+        first_numbered = next((key for key in verse_keys if key[1] > 0), shown_start)
+        hint_reference = _passage_label(book_name, first_numbered, first_numbered)
+
+    genre = get_genre(book)
     if genre:
         result += f"\n\n---\n{format_genre_guidance(genre)}"
 
     # Hint: Torah Weave structural partners are available for Gen–Deu verses.
     # Kept as a one-line nudge so the agent can follow up with get_torah_weave
     # only when the structural reading is relevant.
-    if verse.get("book") in ("Gen", "Exo", "Lev", "Num", "Deu"):
+    if book in ("Gen", "Exo", "Lev", "Num", "Deu"):
         if await db.has_torah_weave_data():
-            result += (
-                f"\n\n---\n*Torah Weave structural partners available for this verse "
-                f"via `get_torah_weave` (reference='{reference}') — returns the cells "
-                f"this verse is deliberately paired with under Moshe Kline's Woven "
-                f"Torah hypothesis.*"
-            )
+            if single:
+                result += (
+                    f"\n\n---\n*Torah Weave structural partners available for this verse "
+                    f"via `get_torah_weave` (reference='{hint_reference}') — returns the cells "
+                    f"this verse is deliberately paired with under Moshe Kline's Woven "
+                    f"Torah hypothesis.*"
+                )
+            else:
+                result += (
+                    f"\n\n---\n*Torah Weave structural partners are available per verse "
+                    f"via `get_torah_weave` (e.g. reference='{hint_reference}') — returns "
+                    f"the cells a verse is deliberately paired with under Moshe Kline's "
+                    f"Woven Torah hypothesis.*"
+                )
 
-    # Hint: a catalogued manuscript-variant or interpretive case for this verse.
-    case_keys = await db.get_textual_variant_case_keys(reference)
-    variant_case_keys = [k for k in case_keys if k not in INTERPRETIVE_CASE_KEYS]
-    if variant_case_keys:
-        result += (
-            f"\n\n---\n*Textual variant catalogued for this verse "
-            f"({', '.join(variant_case_keys)}): readings, witnesses, and "
-            f"attributed analysis via `get_textual_variant` (reference='{reference}').*"
+    # Hint: catalogued manuscript-variant or interpretive cases inside the
+    # displayed span. The target tool takes one verse, so in a passage each
+    # case is cued with its own verse.
+    cases = await db.get_textual_variant_cases_in_span(
+        book, shown_start[0], shown_start[1], shown_end[0], shown_end[1]
+    )
+    variant_cases = [case for case in cases if case["case_key"] not in INTERPRETIVE_CASE_KEYS]
+    interpretive_cases = [case for case in cases if case["case_key"] in INTERPRETIVE_CASE_KEYS]
+
+    def cued(found: list[dict]) -> str:
+        return ", ".join(
+            f"{_passage_label(book_name, (case['chapter'], case['verse']), (case['chapter'], case['verse']))}"
+            f" ({case['case_key']})"
+            for case in found
         )
-    elif case_keys:
-        result += (
-            f"\n\n---\n*Translation and interpretation notes catalogued for this "
-            f"verse (no manuscript variant): translation decisions and attributed "
-            f"analysis via `get_textual_variant` (reference='{reference}').*"
-        )
+
+    if single:
+        if variant_cases:
+            keys = ", ".join(case["case_key"] for case in variant_cases)
+            result += (
+                f"\n\n---\n*Textual variant catalogued for this verse ({keys}): "
+                f"readings, witnesses, and attributed analysis via "
+                f"`get_textual_variant` (reference='{hint_reference}').*"
+            )
+        elif interpretive_cases:
+            result += (
+                f"\n\n---\n*Translation and interpretation notes catalogued for this "
+                f"verse (no manuscript variant): translation decisions and attributed "
+                f"analysis via `get_textual_variant` (reference='{hint_reference}').*"
+            )
+    else:
+        if variant_cases:
+            result += (
+                f"\n\n---\n*Textual variants catalogued in this passage: {cued(variant_cases)}. "
+                f"Readings, witnesses, and attributed analysis via "
+                f"`get_textual_variant` with one of those verses as the reference.*"
+            )
+        if interpretive_cases:
+            result += (
+                f"\n\n---\n*Translation and interpretation notes (no manuscript variant) "
+                f"catalogued in this passage: {cued(interpretive_cases)}. Translation "
+                f"decisions and attributed analysis via `get_textual_variant` with one "
+                f"of those verses as the reference.*"
+            )
 
     # Hint: NT↔OT LXX-form quotation. Surfaces in both directions — looking up
     # the OT verse mentions the NT quotation, while looking up the NT verse
     # mentions the OT source.
-    lxx_hints = await db.get_nt_ot_lxx_quote_hints(reference)
+    lxx_hints = await db.get_lxx_quote_hints_for_passage(
+        book, shown_start[0], shown_start[1], shown_end[0], shown_end[1]
+    )
     if lxx_hints:
         # Show at most 2 hints inline — keep the cue terse.
-        normalized = db._normalize_reference(reference)
-        primary_side = "ot" if any(h["ot_reference"] == normalized for h in lxx_hints) else "nt"
         cues = []
         for h in lxx_hints[:2]:
-            if primary_side == "ot":
-                cues.append(f"quoted in **{h['nt_display']}** ({h['divergence_type']})")
+            if h["passage_side"] == "ot":
+                cue = f"quoted in **{h['nt_display']}** ({h['divergence_type']})"
+                own = h["ot_display"]
             else:
-                cues.append(f"quotes **{h['ot_display']}** in its LXX form ({h['divergence_type']})")
+                cue = f"quotes **{h['ot_display']}** in its LXX form ({h['divergence_type']})"
+                own = h["nt_display"]
+            cues.append(cue if single else f"{own} {cue}")
+        if len(lxx_hints) > 2:
+            cues.append(f"{len(lxx_hints) - 2} more")
+        target = (
+            f"(reference='{hint_reference}')" if single
+            else "with the quoting or quoted verse as the reference"
+        )
         result += (
             f"\n\n---\n*NT↔OT LXX-form quotation: " + "; ".join(cues) + ". "
             f"Separated manuscript evidence and attributed analysis via "
-            f"`get_textual_variant` (reference='{reference}').*"
+            f"`get_textual_variant` {target}.*"
         )
 
     # Hint: cross-references are nearly always relevant when handling a verse.
     # One-line nudge so the agent reaches for get_cross_references after a
     # bare lookup_verse, and a specialised aside for John/Rev (where Gage's
     # typological pairings are particularly rich).
-    xref_hint = (
-        f"\n\n---\n*Cross-references for this verse are available via "
-        f"`get_cross_references` (reference='{reference}') — returns the "
-        f"strongest verses traditionally read alongside this one across the "
-        f"CH curated set, Burnett's deification chain, and the TSK topical "
-        f"index"
-    )
-    if verse.get("book") in ("Jhn", "Rev"):
+    if single:
+        xref_hint = (
+            f"\n\n---\n*Cross-references for this verse are available via "
+            f"`get_cross_references` (reference='{hint_reference}') — returns the "
+            f"strongest verses traditionally read alongside this one across the "
+            f"CH curated set, Burnett's deification chain, and the TSK topical "
+            f"index"
+        )
+    else:
+        xref_hint = (
+            f"\n\n---\n*Cross-references are indexed per verse: call "
+            f"`get_cross_references` with one verse of this passage (e.g. "
+            f"reference='{hint_reference}') — returns the strongest verses "
+            f"traditionally read alongside it across the CH curated set, "
+            f"Burnett's deification chain, and the TSK topical index"
+        )
+    if book in ("Jhn", "Rev"):
         xref_hint += (
             ", including Gage/Bradley John↔Revelation typological parallels"
         )
