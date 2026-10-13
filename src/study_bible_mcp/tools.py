@@ -32,6 +32,7 @@ import unicodedata
 from mcp.types import Tool, ToolAnnotations
 
 from .corpora import CORPORA, all_periods
+from .database import HEBREW_PREFIX_LETTERS, strip_editorial_signs
 from .parsers.biblical_versions import VERSE_MAPPING_CREDIT
 
 
@@ -229,9 +230,13 @@ English search is stemmed (build/building) and matches only the translation's
 own wording (a translator may render one original term several ways). Search Greek,
 Hebrew, and Aramaic terms in their own script: accents, breathings, vowel
 points, cantillation, and case are ignored (λογος matches λόγος), but
-transliterations such as "logos" or "memra" do not match. Passages containing
-every query word are returned first; if none contain all of them, passages
-matching any word are returned and the output says so.
+transliterations such as "logos" or "memra" do not match. Editorial signs
+inside a word (restorations [ ], corrections, uncertain-letter circlets) are
+ignored, and a Hebrew or Aramaic word also matches with one or two prefix
+letters (ו ב ה ל מ כ ש) attached: הון finds ובהון. Because a root letter can
+look like a prefix, this can also match a different word (קדש finds מקדש).
+Passages containing every query word are returned first; if none contain all
+of them, passages matching any word are returned and the output says so.
 
 Only the passage text is searched, not work titles or references. Results are
 source passages, not modern historical judgments. Each result gives the corpus,
@@ -1424,33 +1429,51 @@ def _format_ancient_biblical_link(link: dict) -> str:
     return f"{reference} — {link['relationship_note']}"
 
 
-def _fold_for_match(text: str) -> str:
-    """Case- and accent-fold text one character at a time, keeping positions."""
-    folded = []
-    for ch in text:
+def _fold_with_positions(text: str) -> tuple[str, list[int]]:
+    """Fold text as the search index does, keeping each kept character's position.
+
+    Accents, vowel points, cantillation, circlets, format characters, and
+    editorial signs are dropped and case is folded, so ``הַשְּׁקָלִים`` and
+    ``אלמנ֯[ו]ת`` read as ``השקלים`` and ``אלמנות``. ``positions[i]`` is the index
+    in ``text`` of folded character ``i``.
+    """
+    chars: list[str] = []
+    positions: list[int] = []
+    for index, ch in enumerate(text):
+        if unicodedata.category(ch) in ("Mn", "Cf") or not strip_editorial_signs(ch):
+            continue
         base = "".join(
             c for c in unicodedata.normalize("NFD", ch) if not unicodedata.combining(c)
         ).casefold()
-        folded.append(base[:1] or ch)
-    return "".join(folded)
+        chars.append(base[:1] or ch)
+        positions.append(index)
+    return "".join(chars), positions
+
+
+_HEBREW_WORD = re.compile(r"[\u05d0-\u05ea]+")
 
 
 def _match_excerpt(text: str, query: str, limit: int) -> str:
     """Return up to ``limit`` characters of ``text`` around the first query match.
 
-    Matching folds case and accents and accepts a word stem (``build`` finds
-    ``building``), mirroring the search index. Without a match the excerpt
-    starts at the beginning. Ellipses mark text cut at either end.
+    Matching folds like the search index and accepts a word stem (``build``
+    finds ``building``) and, for a Hebrew/Aramaic word, one or two attached
+    prefix letters (``הון`` finds ``ובהון``). Without a match the excerpt starts
+    at the beginning. Ellipses mark text cut at either end.
     """
     if len(text) <= limit:
         return text
-    folded = _fold_for_match(text)
+    folded, folded_positions = _fold_with_positions(text)
     positions = []
-    for word in re.findall(r"\w+", _fold_for_match(query)):
+    for word in re.findall(r"\w+", _fold_with_positions(query)[0]):
         stem = word if len(word) <= 5 else word[: len(word) - 2]
-        found = re.search(rf"\b{re.escape(stem)}", folded)
+        if _HEBREW_WORD.fullmatch(word):
+            pattern = rf"(?<!\w)[{HEBREW_PREFIX_LETTERS}]{{0,2}}{re.escape(stem)}"
+        else:
+            pattern = rf"\b{re.escape(stem)}"
+        found = re.search(pattern, folded)
         if found:
-            positions.append(found.start())
+            positions.append(folded_positions[found.start()])
     start = max(0, min(positions) - limit // 5) if positions else 0
     if start:
         space = text.find(" ", start)

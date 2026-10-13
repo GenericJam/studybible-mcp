@@ -254,7 +254,11 @@ Only the passage text is searched, so a word that appears only in a work
 title (`Jewish`, `War`, `Life`) does not match every passage of that work.
 English search is stemmed (`build` matches `building`); Greek, Hebrew, and
 Aramaic search ignores accents, breathings, vowel points, cantillation, and case
-(`βαπτισμω` matches `βαπτισμῷ`). Passages containing every query word come
+(`βαπτισμω` matches `βαπτισμῷ`), and editorial signs printed inside a word
+(`אלמנות` matches `אלמנ֯[ו]ת`). A Hebrew or Aramaic word also matches with one or
+two attached prefix letters (ו ב ה ל מ כ ש): `הון המקדש` finds `ובהון המקדש`.
+Because a root letter can look like a prefix, a search can also find a
+different word (`קדש` finds `מקדש`). Passages containing every query word come
 first; when none do, passages matching any word are returned with an explicit
 note. `biblical_reference` accepts a chapter, verse, or verse range (`Luke 21`,
 `Luke 21:5`, `Luke 21:5-6`) and filters to curated narrative-overlap links (33
@@ -1021,6 +1025,13 @@ its own corpus inside a savepoint after validating every passage and link, and
 merges the FTS index so repeated upgrades do not grow it. Indexed originals are
 folded for search: Greek accents and breathings and Hebrew/Aramaic vowel points
 and cantillation are removed and case is folded, in the index and the query.
+Editorial signs inside words (`[ ] ⟨ ⟩ < > { } ( ) ^ ¦`) and invisible format
+characters are deleted rather than treated as word breaks, in the index and the
+query; a corpus can also declare `search_index_removals`, patterns for printed
+text that is not part of the reading (Qumran's scribal erasures and `vacat`),
+which are deleted from the index. Every Hebrew-script word is also indexed
+without one or two leading prefix letters, keeping at least two letters. The
+displayed text keeps every sign.
 
 ### Josephus
 

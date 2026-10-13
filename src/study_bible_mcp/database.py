@@ -244,14 +244,16 @@ _FTS_OPERATORS = {"AND", "OR", "NOT", "NEAR"}
 
 
 def _strip_marks(text: str) -> str:
-    """Drop every nonspacing mark after canonical decomposition, then recompose.
+    """Drop nonspacing marks and format characters after decomposition, then recompose.
 
-    Removes Greek accents, breathings and iota subscripts, and Hebrew/Aramaic
-    niqqud, cantillation, and the combining grapheme joiner.
+    Removes Greek accents, breathings and iota subscripts, Hebrew/Aramaic
+    niqqud, cantillation, the uncertain-letter circlet and the combining
+    grapheme joiner, and invisible format characters (left-to-right marks,
+    zero-width joiners) that would otherwise split a word.
     """
     decomposed = unicodedata.normalize("NFD", unicodedata.normalize("NFC", text))
     return unicodedata.normalize(
-        "NFC", "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+        "NFC", "".join(ch for ch in decomposed if unicodedata.category(ch) not in ("Mn", "Cf"))
     )
 
 
@@ -263,6 +265,63 @@ def fold_ancient_search_text(text: str) -> str:
     sigma, niqqud, and cantillation do not affect matching.
     """
     return unicodedata.normalize("NFC", _strip_marks(text).casefold())
+
+
+# Editorial signs printed inside words: restorations [ ] ⟨ ⟩, corrections < >
+# and << >>, supralinear insertions ^ ^, alternative readings ( ), removals
+# { } and {{ }}, and line-break bars ¦. Search deletes the signs (keeping the
+# letters between them) rather than splitting the word at them.
+_EDITORIAL_SIGNS = re.compile(r"[\[\]⟨⟩〈〉<>{}()^¦]")
+# Prefixed particles written joined to the next word: and, in, the, to, from,
+# as, which/that.
+HEBREW_PREFIX_LETTERS = "ובהלמכש"
+_HEBREW_WORD = re.compile(r"[\u05d0-\u05ea]+")
+_MIN_UNPREFIXED_LETTERS = 2
+
+
+def strip_editorial_signs(text: str) -> str:
+    """Delete editorial signs so a marked word reads as one word."""
+    return _EDITORIAL_SIGNS.sub("", text)
+
+
+def hebrew_prefix_variants(word: str) -> list[str]:
+    """A Hebrew/Aramaic word without one, then two, leading prefix letters.
+
+    Each variant keeps at least two letters ('ובהון' gives 'בהון' and 'הון').
+    A root letter that is also a prefix letter is stripped too ('מקדש' gives
+    'קדש'), so these variants widen matching rather than parse the word.
+    """
+    return [
+        word[count:]
+        for count in (1, 2)
+        if len(word) - count >= _MIN_UNPREFIXED_LETTERS
+        and all(letter in HEBREW_PREFIX_LETTERS for letter in word[:count])
+    ]
+
+
+def ancient_search_index_text(original: str, removals: tuple[str, ...] = ()) -> str:
+    """The folded original-language text stored in the search index.
+
+    ``removals`` are a corpus's patterns for printed text that is not part of
+    the reading (e.g. scribal erasures); they are deleted first. Editorial
+    signs are then deleted and the text folded like a query. Hebrew-script
+    words without their leading prefix letters are appended, so 'הון' finds
+    'ובהון'. The displayed text is stored separately and keeps every sign.
+    """
+    for pattern in removals:
+        # Deleted, not replaced by a space: an erasure inside a word
+        # ('י{{א}}<<ע>>בורו') must leave the corrected word whole.
+        original = re.sub(pattern, "", original)
+    folded = fold_ancient_search_text(strip_editorial_signs(original))
+    words = set(re.findall(r"\w+", folded))
+    variants = dict.fromkeys(
+        variant
+        for word in words
+        if _HEBREW_WORD.fullmatch(word)
+        for variant in hebrew_prefix_variants(word)
+        if variant not in words
+    )
+    return f"{folded}\n{' '.join(sorted(variants))}" if variants else folded
 
 
 def parse_ancient_biblical_reference(reference: str) -> tuple[str, int, int] | None:
@@ -1865,7 +1924,9 @@ class StudyBibleDB:
         terms: list[str] = []
         # Marks are stripped before tokenizing: Python's \w does not match
         # Hebrew niqqud or cantillation, which would otherwise split words.
-        for token in re.findall(r"\w+", _strip_marks(query)):
+        # Editorial signs are deleted as in the index, so a word pasted from
+        # a transcription ('אלמנ֯[ו]ת') is searched whole.
+        for token in re.findall(r"\w+", _strip_marks(strip_editorial_signs(query))):
             if token in _FTS_OPERATORS:
                 continue
             for term in re.findall(r"\w+", fold_ancient_search_text(token)):

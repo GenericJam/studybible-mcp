@@ -30,7 +30,13 @@ from study_bible_mcp.corpora.locators import (
     SECTION,
     roman_to_int,
 )
-from study_bible_mcp.database import StudyBibleDB, create_schema, fold_ancient_search_text
+from study_bible_mcp.database import (
+    StudyBibleDB,
+    ancient_search_index_text,
+    create_schema,
+    fold_ancient_search_text,
+    hebrew_prefix_variants,
+)
 from study_bible_mcp.parsers.ancient_sources import import_corpus
 from study_bible_mcp.tools import TOOLS
 
@@ -465,6 +471,77 @@ async def test_search_folds_hebrew_niqqud_in_index_and_query(tmp_path, rabbinic)
     assert [row["reference"] for row in pointed["rows"]] == ["Mishnah Shekalim 1:1"]
     assert [row["reference"] for row in plain["rows"]] == ["Mishnah Shekalim 1:1"]
     assert missing["status"] == "corpus_missing"
+
+
+# A Qumran-style line: an uncertain letter (circlet) and a restoration inside a
+# word, a prefixed phrase, a scribal correction (erased א, ע written over it),
+# and a vacat.
+MARKED_HEBREW = "אלמנ֯[ו]ת ובהון המקדש י{{א}}<<ע>>בורו vacat יתומים"
+ERASURES = (r"\{\{[^{}]*\}\}", r"\{[^{}]*\}", r"\bvacat\b")
+
+
+@pytest.mark.asyncio
+async def test_search_reads_through_editorial_signs_and_prefixes(tmp_path, rabbinic, monkeypatch):
+    monkeypatch.setitem(
+        CORPORA, "rabbinic", replace(CORPORA["rabbinic"], search_index_removals=ERASURES)
+    )
+    rabbinic[0] = _shekalim_row(original_text=MARKED_HEBREW)
+    conn = _db(tmp_path)
+    import_corpus(conn, "rabbinic", tmp_path)
+    stored = conn.execute("SELECT original_text FROM ancient_source_passages").fetchone()[0]
+    conn.close()
+    database = StudyBibleDB(tmp_path / "corpora.db")
+    await database.connect()
+    try:
+        async def search(query):
+            return await database.search_ancient_sources(query, corpus="rabbinic")
+
+        restored = await search("אלמנות")
+        pasted = await search("אלמנ֯[ו]ת")
+        unprefixed = await search("הון המקדש")
+        one_prefix = await search("בהון")
+        corrected = await search("יעבורו")
+        erased = await search("יאבורו")
+        vacat = await search("vacat")
+    finally:
+        await database.close()
+
+    assert stored == MARKED_HEBREW
+    for found in (restored, pasted, one_prefix, corrected):
+        assert [row["reference"] for row in found["rows"]] == ["Mishnah Shekalim 1:1"]
+    assert pasted["terms"] == ["אלמנות"]
+    assert unprefixed["match"] == "all"
+    assert erased["status"] == "no_match"
+    assert vacat["status"] == "no_match"
+
+
+def test_prefix_variants_strip_one_or_two_prefix_letters_and_keep_two_letters():
+    assert hebrew_prefix_variants("ובהון") == ["בהון", "הון"]
+    assert hebrew_prefix_variants("ומה") == ["מה"]
+    assert hebrew_prefix_variants("שם") == []
+    assert hebrew_prefix_variants("דבר") == []
+    assert hebrew_prefix_variants("יתומים") == []
+
+
+def test_index_text_adds_new_prefix_variants_only_for_hebrew_script():
+    assert ancient_search_index_text("Ἰωάννου [τοῦ] βαπτιστοῦ") == "ιωαννου του βαπτιστου"
+    # 'טוב' is already indexed, so 'וטוב' adds nothing.
+    assert ancient_search_index_text("וטוב טוב") == "וטוב טוב"
+    assert ancient_search_index_text("ובהון") == "ובהון\nבהון הון"
+
+
+def test_excerpt_centres_hebrew_matches_through_points_signs_and_prefixes():
+    from study_bible_mcp.tools import _match_excerpt
+
+    def passage(middle):
+        return "שורה " * 400 + middle + " סוף" * 400
+
+    pointed = passage(SHEKALIM_HEBREW)
+    marked = passage("ובהון המקדש אלמנ֯[ו]ת")
+
+    assert "הַשְּׁקָלִים" in _match_excerpt(pointed, "שקלים", 600)
+    assert "אלמנ֯[ו]ת" in _match_excerpt(marked, "אלמנות", 600)
+    assert "ובהון" in _match_excerpt(marked, "הון", 600)
 
 
 # --- lookup_ancient_source across corpora

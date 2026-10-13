@@ -29,6 +29,17 @@
 - Search folds Hebrew and Aramaic vowel points and cantillation like Greek
   accents. A pointed Hebrew query is no longer split into fragments at each
   vowel point.
+- Search reads through editorial signs inside a word: restorations,
+  corrections, supralinear insertions, alternative readings, line-break bars,
+  and invisible format characters are deleted rather than splitting the word,
+  so `אלמנות` finds `אלמנ֯[ו]ת`. A corpus can declare text the search index
+  drops (`search_index_removals`, e.g. scribal erasures). The displayed text is
+  unchanged.
+- Hebrew and Aramaic words are also indexed without one or two leading prefix
+  letters (ו ב ה ל מ כ ש), so `הון המקדש` finds `ובהון המקדש`. A root letter
+  that looks like a prefix widens matches too (`קדש` finds `מקדש`). Result
+  excerpts are centred on such matches the same way, including in pointed
+  text. Re-run `python scripts/upgrade_database.py` to rebuild the index.
 - Corpus imports validate every passage and link before writing, replace one
   corpus inside a savepoint, and merge the FTS index afterwards, so repeated
   upgrades no longer grow it (about 5 MB per Josephus re-import before).

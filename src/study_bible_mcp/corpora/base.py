@@ -91,6 +91,10 @@ class Corpus:
     - ``biblical_links(passages)``: the ``BiblicalLink`` entries, given the
       validated passage dicts (static curated lists may ignore them; a corpus
       keyed to biblical verses, such as a targum, can derive one per passage).
+
+    ``search_index_removals`` are regular expressions for printed text that is
+    not part of the reading a search should match, such as a transcription's
+    scribal erasures; matches are deleted from the search index only.
     """
 
     key: str
@@ -108,6 +112,7 @@ class Corpus:
     example_citation: str
     aliases: tuple[str, ...] = ()
     heading_label: str = "Editorial heading"
+    search_index_removals: tuple[str, ...] = ()
 
     def work(self, key: str) -> Work:
         for work in self.works:

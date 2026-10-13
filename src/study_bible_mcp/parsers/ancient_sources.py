@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..corpora import CORPORA, Corpus, combined_license
-from ..database import BOOK_ABBREV_MAP, fold_ancient_search_text
+from ..database import BOOK_ABBREV_MAP, ancient_search_index_text
 
 _BOOK_CODES = frozenset(BOOK_ABBREV_MAP.values())
 
@@ -146,7 +146,9 @@ def import_corpus(conn: sqlite3.Connection, key: str, directory: Path) -> int:
             (
                 (
                     passage_id, row["work_title"], row["reference"], row["text"],
-                    fold_ancient_search_text(row.get("original_text") or ""),
+                    ancient_search_index_text(
+                        row.get("original_text") or "", corpus.search_index_removals
+                    ),
                 )
                 for passage_id, row in zip(ids, rows)
             ),
