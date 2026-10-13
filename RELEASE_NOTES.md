@@ -98,14 +98,18 @@
   Psalm 40:6 "Brenton's Greek reads σῶμα for ὠτία". Psalm 82:6 agrees and shows
   only the note.
 - For eleven Apocrypha books (1 Esdras, 1–2 Maccabees, Baruch, Bel, Judith,
-  Letter of Jeremiah, Sirach, Susanna, Tobit, Wisdom) Brenton's edition prints
-  the 1611 King James Version, translated from other Greek texts and partly from
-  the Latin, rather than his own translation. Those rows are labelled as the KJV
-  Apocrypha and warn that the English is not a translation of the Greek shown
-  (Sirach 17:17 adds "in the division of the nations of the whole earth");
-  they are not compared with Brenton's Greek, which is not what they translate.
-- 8,938 of the 23,747 rows with Brenton's own English (38%) are flagged; the
-  4,567 KJV Apocrypha rows are not compared. Brenton's Greek and the summary
+  Letter of Jeremiah, Sirach, Susanna, Tobit, Wisdom) and Daniel 3:24–90,
+  Brenton's edition prints the KJV (Authorized Version) Apocrypha, lightly
+  adapted, rather than his own translation; the KJV was translated from other
+  Greek texts (Sirach 17:17 adds "in the division of the nations of the whole
+  earth"). Those rows label the English "KJV Apocrypha", with one closing note,
+  and are not compared with Brenton's Greek, which is not what they translate.
+- Rows outside the Protestant canon (Septuagint-only books, the Greek additions
+  to Esther, Daniel 3:24–90, Psalm 151, Odes 7–8, 12 and 14) are marked
+  "(Apocrypha)", with one closing line that they are not in the Protestant
+  canon (cf. Westminster Confession 1.3).
+- 8,914 of the 23,684 rows with Brenton's own English (38%) are flagged; the
+  4,630 KJV Apocrypha rows are not compared. Brenton's Greek and the summary
   are stored only on flagged rows, which adds about 5 MB to the database.
   Existing comparison tables gain the new columns on re-import.
 

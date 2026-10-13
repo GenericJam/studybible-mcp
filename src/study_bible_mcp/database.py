@@ -19,7 +19,6 @@ import logging
 from .parsers.biblical_versions import (
     BRENTON_GREEK_SOURCE_URL,
     BRENTON_TRANSLATION_NOTE,
-    KJV_APOCRYPHA_BOOKS,
     KJV_APOCRYPHA_NOTE,
     KJV_APOCRYPHA_TRANSLATION_LABEL,
     LXX_BOOK_CODES,
@@ -32,7 +31,9 @@ from .parsers.biblical_versions import (
     MT_SOURCE_URL,
     MT_TRANSLATION_LABEL,
     MT_VERSIFICATION_METHOD,
+    apocrypha_name,
     expand_lxx_morphology,
+    is_kjv_apocrypha,
 )
 
 logger = logging.getLogger("study-bible-mcp")
@@ -192,10 +193,13 @@ def _lxx_row(row: dict) -> dict:
     Rows with Brenton's English get the standing translation note. Brenton's
     own Greek (with its source) and the difference summary are kept only when
     that Greek differs from the Rahlfs text (``brenton_greek_differs`` = 1).
-    For the books where Brenton's edition prints the KJV Apocrypha, the English
-    is labelled as such and carries its own warning instead: Brenton's Greek is
-    not what that English translates, so it is not compared or shown.
+    Where Brenton's edition prints the KJV Apocrypha, the English is labelled
+    as such and carries its own note instead: Brenton's Greek is not what that
+    English translates, so it is not compared or shown. Rows outside the
+    Protestant canon get ``apocrypha`` (the book or addition's name).
     """
+    edition_book = row["edition_reference"].split(".", 1)[0]
+    chapter, verse = row["edition_chapter"], row["edition_verse"]
     row.update(
         version="LXX",
         language="Greek",
@@ -207,8 +211,10 @@ def _lxx_row(row: dict) -> dict:
             row.pop("edition_chapter"), row.pop("edition_verse"), row.pop("edition_verse_suffix")
         ),
     )
-    edition_book = row["edition_reference"].split(".", 1)[0]
-    if row["translation"] and edition_book in KJV_APOCRYPHA_BOOKS:
+    apocrypha = apocrypha_name(edition_book, chapter, verse, row["canonical_reference"])
+    if apocrypha:
+        row["apocrypha"] = apocrypha
+    if row["translation"] and is_kjv_apocrypha(edition_book, chapter, verse):
         row.update(
             translation_label=KJV_APOCRYPHA_TRANSLATION_LABEL,
             translation_note=KJV_APOCRYPHA_NOTE,
