@@ -470,3 +470,23 @@ async def test_search_filters_by_habakkuk_link_and_folds_hebrew(tmp_path, monkey
     assert "CD 19:1" in uncertain
     assert "CD 19:1" in suffix
     assert "1QpHab 2:1–2" in restored
+
+
+@pytest.mark.asyncio
+async def test_search_reads_through_brackets_and_prefixes_and_drops_erasures(tmp_path, monkeypatch):
+    db_path = _build_db(tmp_path, monkeypatch)
+    search = server.handle_search_ancient_sources
+
+    # 1QS 1:1 prints '[ספר ס]ר֯ך' (restoration and circlet inside the word);
+    # 1QSa 1:1 has 'הסרך' with the article prefixed.
+    serekh = await _call(db_path, monkeypatch, search, query="סרך", corpus="qumran")
+    pasted = await _call(db_path, monkeypatch, search, query="ס]ר֯ך", corpus="qumran")
+    # CD 19:1 prints the scribe's erasure '{{נפ◦◦}}'; CD 1:1 a vacat.
+    erased = await _call(db_path, monkeypatch, search, query="נפ", corpus="qumran")
+    vacat = await _call(db_path, monkeypatch, search, query="vacat", corpus="qumran")
+
+    assert "1QS 1:1" in serekh and "1QSa 1:1" in serekh
+    assert "1QS 1:1" in pasted
+    assert "[ספר ס]ר\u05afך" in serekh
+    assert "CD 19:1" not in erased
+    assert "CD 1:1" not in vacat

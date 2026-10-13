@@ -298,6 +298,10 @@ _BRACKETS = (
     ("vac", "1", "vacat", ""),
 )
 _MARK_FEATURES = ("rec", "rem", "cor", "alt", "vac")
+# Letters removed by the scribe {{ }} or a modern editor { } are not part of
+# the corrected reading, and 'vacat' is not text: search drops them, so
+# 'י{{א}}<<ע>>בורו' is indexed as 'יעבורו'. Doubled braces first.
+SEARCH_INDEX_REMOVALS = (r"\{\{[^{}]*\}\}", r"\{[^{}]*\}", r"\bvacat\b")
 _EMPTY_BRACKETS = re.compile(r"(\[|\{\{|\{|<<|<|\^|\()(\]|\}\}|\}|>>|>|\^|\))")
 # A circlet above a letter marks it as damaged or uncertain (any of the
 # transcription's four uncertainty degrees); search folding drops it.
@@ -587,5 +591,6 @@ CORPUS = Corpus(
     example_query="מורה הצדק",
     example_citation="CD 6:11",
     aliases=("Dead Sea Scrolls", "Qumran", "DSS"),
+    search_index_removals=SEARCH_INDEX_REMOVALS,
 )
 

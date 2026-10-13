@@ -1151,9 +1151,12 @@ and the tools say so.
   A circlet above a letter (U+05AF) marks any of its four uncertainty
   degrees, `◦` an unidentified sign, and `…` a missing sign; the morpheme
   breaks Abegg inserts before suffixes are dropped, and the transcription's
-  `׃` marks are kept. Search folding ignores the circlets; a bracket inside a
-  word splits it for search. Other ETCBC scrolls are not imported (1QSb, for
-  example, mixes fragment labels and line gaps).
+  `׃` marks are kept. Search ignores the circlets and the brackets inside a
+  word (`סרך` finds `[ספר ס]ר֯ך`), and indexes the corrected reading: letters
+  in `{ }` and `{{ }}` and the word `vacat` are left out of the search index
+  (`י{{א}}<<ע>>בורו` is found as `יעבורו`), though the displayed text keeps
+  them. Other ETCBC scrolls are not imported (1QSb, for example, mixes
+  fragment labels and line gaps).
 - **Pesher Habakkuk** (`1QpHab`): Hebrew Wikisource, `מגילות מדבר יהודה/1QpHab
   פשר חבקוק`, revision 2949117 (SHA-256 `2ee32f91…6b24`), licensed
   [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); only its

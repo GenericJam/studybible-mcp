@@ -20,9 +20,11 @@
   `search_ancient_sources(query="צדיק", biblical_reference="Habakkuk 2:4", corpus="qumran")`
   finds 1QpHab column 7. Search Qumran texts in Hebrew: they have no English,
   and work titles are not searched.
-- Transcription brackets, vacats, and uncertain letters (a circlet that search
-  ignores) are kept; Abegg's morpheme breaks are removed so suffixed words
-  are searchable whole.
+- Transcription brackets, vacats, and uncertain letters are kept in the text;
+  Abegg's morpheme breaks are removed so suffixed words are searchable whole.
+  Search reads through the brackets and circlets inside a word and indexes the
+  corrected reading: erased and editor-removed letters (`{{ }}`, `{ }`) and
+  `vacat` are left out of the search index.
 
 ---
 
